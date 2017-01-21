@@ -7,6 +7,8 @@
 
 package testing
 
+import "github.com/heynemann/deepstream.io-client-go/interfaces"
+
 //MockProtocol should be used for unit tests
 type MockProtocol struct {
 	Error           error
@@ -35,6 +37,14 @@ func (m *MockProtocol) Connect() error {
 
 	m.HasConnected = true
 	return nil
+}
+
+func (m *MockProtocol) SendAction(action interfaces.Action) error {
+	return nil
+}
+
+func (m *MockProtocol) RecvActions() ([]interfaces.Action, error) {
+	return nil, nil
 }
 
 //Authenticate mock protocol

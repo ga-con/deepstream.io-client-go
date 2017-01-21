@@ -14,6 +14,14 @@ import (
 	"github.com/heynemann/deepstream.io-client-go/interfaces"
 )
 
+var (
+	//AvailableMessageTypes returns all the available message types
+	AvailableMessageTypes = map[string]func(*Message) (interfaces.Action, error){
+		interfaces.ActionChallenge: func(msg *Message) (interfaces.Action, error) { return NewChallengeAction(msg) },
+		interfaces.ActionAck:       func(msg *Message) (interfaces.Action, error) { return NewAckAction(msg) },
+	}
+)
+
 //Data represents a portion of data coming from client
 type Data struct {
 	Type  interfaces.DataType
@@ -62,14 +70,30 @@ func ParseMessages(raw string) ([]*Message, error) {
 	}
 
 	rawMessages := strings.Split(raw, interfaces.MessageSeparator)
-	messages := make([]*Message, len(rawMessages))
-	for i, rawMessage := range rawMessages {
+	messages := []*Message{}
+	for _, rawMessage := range rawMessages {
+		if rawMessage == "" {
+			continue
+		}
 		message, err := NewMessage(rawMessage)
 		if err != nil {
 			return nil, err
 		}
-		messages[i] = message
+		messages = append(messages, message)
 	}
 
 	return messages, nil
+}
+
+//CathegorizeAction returns a cathegorized action
+func CathegorizeAction(message *Message) (interfaces.Action, error) {
+	actionFunc, ok := AvailableMessageTypes[message.Action]
+	if !ok {
+		return nil, errors.ErrUnknownAction
+	}
+	action, err := actionFunc(message)
+	if err != nil {
+		return nil, err
+	}
+	return action, nil
 }

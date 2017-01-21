@@ -111,4 +111,31 @@ var _ = Describe("Client Package", func() {
 			})
 		})
 	})
+	Describe("[Integration]", func() {
+		Describe("Client", func() {
+			Describe("Connection", func() {
+				It("Should create a client", func() {
+					client, err := client.New("localhost:6020")
+					Expect(err).NotTo(HaveOccurred())
+					Expect(client).NotTo(BeNil())
+					Expect(client.ConnectionState).To(Equal(interfaces.ConnectionStateAwaitingConnection))
+				})
+			})
+
+			Describe("Authentication", func() {
+				It("Should send authentication message", func() {
+					client, err := client.New("localhost:6020")
+					Expect(err).NotTo(HaveOccurred())
+
+					err = client.Login(map[string]interface{}{
+						"username": "userA",
+						"password": "password",
+					})
+					Expect(err).NotTo(HaveOccurred())
+
+					Expect(client.ConnectionState).To(Equal(interfaces.ConnectionStateOpen))
+				})
+			})
+		})
+	})
 })

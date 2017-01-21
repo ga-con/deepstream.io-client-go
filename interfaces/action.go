@@ -7,10 +7,8 @@
 
 package interfaces
 
-//Protocol specifies the transport protocol for the client
-type Protocol interface {
-	Connect() error
-	Close() error
-	SendAction(action Action) error
-	RecvActions() ([]Action, error)
+//Action represents a single action coming from deepstream.io
+type Action interface {
+	//ToAction returns the action in raw format that deepstream.io understands
+	ToAction() string
 }

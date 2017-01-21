@@ -5,12 +5,11 @@
 // http://www.opensource.org/licenses/mit-license
 // Copyright © 2017 Bernardo Heynemann <heynemann@gmail.com>
 
-package interfaces
+package errors
 
-//Protocol specifies the transport protocol for the client
-type Protocol interface {
-	Connect() error
-	Close() error
-	SendAction(action Action) error
-	RecvActions() ([]Action, error)
-}
+import "errors"
+
+var (
+	//ErrUnknownAction error
+	ErrUnknownAction = errors.New("Action with the specified type could not be understood.")
+)

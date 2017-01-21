@@ -7,7 +7,13 @@
 
 package client
 
-import "github.com/heynemann/deepstream.io-client-go/interfaces"
+import (
+	"encoding/json"
+	"fmt"
+
+	"github.com/heynemann/deepstream.io-client-go/interfaces"
+	"github.com/heynemann/deepstream.io-client-go/message"
+)
 
 //Client represents a connection to a deepstream.io server
 type Client struct {
@@ -23,7 +29,11 @@ func New(url string, protocolOrNil ...interfaces.Protocol) (*Client, error) {
 		proto = protocolOrNil[0]
 	}
 	if proto == nil {
-		//TODO: load real protocol
+		var err error
+		proto, err = NewWebsocketProtocol(url)
+		if err != nil {
+			return nil, err
+		}
 	}
 	cli := &Client{
 		URL:             url,
@@ -41,12 +51,49 @@ func New(url string, protocolOrNil ...interfaces.Protocol) (*Client, error) {
 
 //Connect with deepstream.io server
 func (c *Client) Connect() error {
+	c.ConnectionState = interfaces.ConnectionStateAwaitingConnection
+
 	err := c.Protocol.Connect()
 	if err != nil {
 		return c.Error(err)
 	}
 
-	c.ConnectionState = interfaces.ConnectionStateAwaitingAuthentication
+	//Send Challenge Response
+	err = c.sendChallengeResponse()
+	if err != nil {
+		return c.Error(err)
+	}
+
+	err = c.receiveAck("C")
+	if err != nil {
+		return c.Error(err)
+	}
+
+	return nil
+}
+
+func (c *Client) sendChallengeResponse() error {
+	challenge := message.NewChallengeResponseAction(c.URL)
+	return c.Protocol.SendAction(challenge)
+}
+
+func (c *Client) receiveAck(expectedTopic string) error {
+	// Receive connection Ack
+	actions, err := c.Protocol.RecvActions()
+	if err != nil {
+		return err
+	}
+
+	if len(actions) != 1 {
+		//TODO: change this
+		return fmt.Errorf("Expected Ack")
+	}
+
+	action := actions[0]
+	if a, ok := action.(*message.AckAction); !ok || a.Topic != expectedTopic {
+		return fmt.Errorf("Expected Ack with topic %s.", expectedTopic)
+	}
+
 	return nil
 }
 
@@ -63,7 +110,41 @@ func (c *Client) Close() error {
 
 //Login with deepstream.io server
 func (c *Client) Login(authParams map[string]interface{}) error {
-	return c.Protocol.Authenticate(authParams)
+	params, err := json.Marshal(authParams)
+	if err != nil {
+		return err
+	}
+	msg := &message.Message{
+		Topic:   interfaces.TopicAuth,
+		Action:  interfaces.ActionRequest,
+		RawData: []string{string(params)},
+	}
+	authRequestAction, err := message.NewAuthRequestAction(msg)
+	if err != nil {
+		return err
+	}
+
+	//Send Authentication Request
+	err = c.Protocol.SendAction(authRequestAction)
+	if err != nil {
+		return err
+	}
+
+	// Receive authentication Ack
+	actions, err := c.Protocol.RecvActions()
+	if len(actions) != 1 {
+		//TODO: change this
+		return c.Error(fmt.Errorf("Expected Auth Ack"))
+	}
+
+	action := actions[0]
+	if a, ok := action.(*message.AckAction); !ok || a.Topic != "A" {
+		return c.Error(fmt.Errorf("Expected Auth Ack"))
+	}
+
+	c.ConnectionState = interfaces.ConnectionStateOpen
+
+	return nil
 }
 
 //Error handlers errors in client

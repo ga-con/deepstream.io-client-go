@@ -8,10 +8,10 @@
 package interfaces
 
 //MessageSeparator invisible message separator
-const MessageSeparator = "\u001e"
+const MessageSeparator = string(byte(30))
 
 //MessagePartSeparator invisible message separator
-const MessagePartSeparator = "\u001f"
+const MessagePartSeparator = string(byte(31))
 
 //SourceMessageConnector identifies source message connector key
 const SourceMessageConnector = "SOURCE_MESSAGE_CONNECTOR"
@@ -130,49 +130,63 @@ const ConnectionStateReconnecting ConnectionState = "RECONNECTING"
 //EVENT.INVALID_VERSION	INVALID_VERSION	✔
 //EVENT.PLUGIN_ERROR	PLUGIN_ERROR	✔
 //EVENT.UNKNOWN_CALLEE	UNKNOWN_CALLEE	✔	✔
+
 //Topic
 
-//name	value	server	client
-//TOPIC.CONNECTION	C	✔	✔
-//TOPIC.AUTH	A	✔	✔
-//TOPIC.ERROR	X	✔	✔
-//TOPIC.EVENT	E	✔	✔
-//TOPIC.RECORD	R	✔	✔
-//TOPIC.RPC	P	✔	✔
-//TOPIC.PRIVATE	PRIVATE/	✔	✔
+//TopicConnection represents a connection related topic
+const TopicConnection = "C"
+
+//TopicAuth represents an auth related topic
+const TopicAuth = "A"
+
+//TopicError represents an error related topic
+const TopicError = "X"
+
+//TopicEvent represents an event related topic
+const TopicEvent = "E"
+
+//TopicRecord represents a record related topic
+const TopicRecord = "R"
+
+//TopicRPC represents an RPC related topic
+const TopicRPC = "P"
+
+//TopicPrivate represents a Private related topic
+const TopicPrivate = "PRIVATE"
+
 //Actions
 
-//name	value	server	client
-//ACTIONS.ACK	A	✔	✔
-//ACTIONS.READ	R	✔	✔
-//ACTIONS.REDIRECT	RED		✔
-//ACTIONS.CHALLENGE	CH		✔
-//ACTIONS.CHALLENGE_RESPONSE	CHR		✔
-//ACTIONS.CREATE	C	✔	✔
-//ACTIONS.UPDATE	U	✔	✔
-//ACTIONS.PATCH	P	✔	✔
-//ACTIONS.DELETE	D	✔	✔
-//ACTIONS.SUBSCRIBE	S	✔	✔
-//ACTIONS.UNSUBSCRIBE	US	✔	✔
-//ACTIONS.HAS	H	✔	✔
-//ACTIONS.SNAPSHOT	SN	✔	✔
-//ACTIONS.LISTEN_SNAPSHOT	LSN	✔
-//ACTIONS.LISTEN	L	✔	✔
-//ACTIONS.UNLISTEN	UL	✔	✔
-//ACTIONS.LISTEN_ACCEPT	LA	✔	✔
-//ACTIONS.LISTEN_REJECT	LR	✔	✔
-//ACTIONS.SUBSCRIPTION_HAS_PROVIDER	SH	✔	✔
-//ACTIONS.SUBSCRIPTIONS_FOR_PATTERN_FOUND	SF	✔
-//ACTIONS.SUBSCRIPTION_FOR_PATTERN_FOUND	SP	✔
-//ACTIONS.SUBSCRIPTION_FOR_PATTERN_REMOVED	SR	✔
-//ACTIONS.PROVIDER_UPDATE	PU	✔	✔
-//ACTIONS.QUERY	Q	✔	✔
-//ACTIONS.CREATEORREAD	CR	✔	✔
-//ACTIONS.EVENT	EVT	✔	✔
-//ACTIONS.ERROR	E	✔	✔
-//ACTIONS.REQUEST	REQ	✔	✔
-//ACTIONS.RESPONSE	RES	✔	✔
-//ACTIONS.REJECTION	REJ	✔	✔
+const ActionAck = "A"
+const ActionRead = "R"
+const ActionRedirect = "RED"
+const ActionChallenge = "CH"
+const ActionChallengeResponse = "CHR"
+const ActionCreate = "C"
+const ActionUpdate = "U"
+const ActionPatch = "P"
+const ActionDelete = "D"
+const ActionSubscribe = "S"
+const ActionUnsubscribe = "uS"
+const ActionHas = "H"
+const ActionSnapshot = "SN"
+const ActionListenSnapshot = "LSN"
+const ActionListen = "L"
+const ActionUnlisten = "UL"
+const ActionListenAccept = "LA"
+const ActionListenReject = "LR"
+const ActionSubscriptionHasProvider = "SH"
+const ActionSubscriptionsForPatternFound = "SF"
+const ActionSubscriptionForPatternFound = "SP"
+const ActionSubscriptionForPatternRemoved = "SR"
+const ActionProviderUpdate = "PU"
+const ActionQuery = "Q"
+const ActionCreateOrRead = "CR"
+const ActionEvent = "EVT"
+const ActionError = "E"
+const ActionRequest = "REQ"
+const ActionResponse = "RES"
+const ActionRejection = "REJ"
+
 //Data Types
 
 //DataType represents one of the available data types in an action
