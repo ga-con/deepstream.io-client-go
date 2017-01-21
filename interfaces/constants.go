@@ -52,29 +52,32 @@ const ServerStateClosed = "closed"
 
 //Connection State
 
+//ConnectionState indicates the possible connection states
+type ConnectionState string
+
 //ConnectionStateClosed indicates the connection has been closed
-const ConnectionStateClosed = "CLOSED"
+const ConnectionStateClosed ConnectionState = "CLOSED"
 
 //ConnectionStateAwaitingConnection indicates the connection is waiting for a connection
-const ConnectionStateAwaitingConnection = "AWAITING_CONNECTION"
+const ConnectionStateAwaitingConnection ConnectionState = "AWAITING_CONNECTION"
 
 //ConnectionStateChallenging indicates the connection is being challenged for credentials
-const ConnectionStateChallenging = "CHALLENGING"
+const ConnectionStateChallenging ConnectionState = "CHALLENGING"
 
 //ConnectionStateAwaitingAuthentication indicates the connection is waiting for authentication
-const ConnectionStateAwaitingAuthentication = "AWAITING_AUTHENTICATION"
+const ConnectionStateAwaitingAuthentication ConnectionState = "AWAITING_AUTHENTICATION"
 
 //ConnectionStateAuthenticating indicates the connection is authenticating with the server
-const ConnectionStateAuthenticating = "AUTHENTICATING"
+const ConnectionStateAuthenticating ConnectionState = "AUTHENTICATING"
 
 //ConnectionStateOpen indicates the connection is open
-const ConnectionStateOpen = "OPEN"
+const ConnectionStateOpen ConnectionState = "OPEN"
 
 //ConnectionStateError indicates the connection has errored
-const ConnectionStateError = "ERROR"
+const ConnectionStateError ConnectionState = "ERROR"
 
 //ConnectionStateReconnecting indicates the connection is reconnecting
-const ConnectionStateReconnecting = "RECONNECTING"
+const ConnectionStateReconnecting ConnectionState = "RECONNECTING"
 
 //Event
 

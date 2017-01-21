@@ -11,6 +11,7 @@ import (
 	"fmt"
 
 	"github.com/heynemann/deepstream.io-client-go/client"
+	"github.com/heynemann/deepstream.io-client-go/interfaces"
 	"github.com/heynemann/deepstream.io-client-go/testing"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -24,35 +25,63 @@ var _ = Describe("Client Package", func() {
 			protocol = testing.NewMockProtocol()
 		})
 
-		It("Should create a client", func() {
-			client := client.New("localhost:6020", protocol)
-			Expect(client).NotTo(BeNil())
+		Describe("Connection", func() {
+			It("Should create a client", func() {
+				client, err := client.New("localhost:6020", protocol)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(client).NotTo(BeNil())
+				Expect(client.ConnectionState).To(Equal(interfaces.ConnectionStateAwaitingAuthentication))
+				Expect(protocol.HasConnected).To(BeTrue())
+			})
+
+			It("Should be in error state when an error happens", func() {
+				expErr := fmt.Errorf("mock error")
+				protocol.Error = expErr
+
+				client, err := client.New("localhost:6020", protocol)
+				Expect(client).NotTo(BeNil())
+				Expect(err).To(MatchError(expErr))
+				Expect(client.ConnectionState).To(Equal(interfaces.ConnectionStateError))
+				Expect(protocol.HasConnected).To(BeFalse())
+			})
 		})
 
 		Describe("Authentication", func() {
 			It("Should authenticate", func() {
-				client := client.New("localhost:6020", protocol)
+				client, err := client.New("localhost:6020", protocol)
+				Expect(err).NotTo(HaveOccurred())
 				Expect(client).NotTo(BeNil())
 
-				err := client.Login()
+				authParams := map[string]interface{}{
+					"user":     "x",
+					"password": "y",
+				}
+				err = client.Login(authParams)
 				Expect(err).NotTo(HaveOccurred())
 
 				Expect(protocol.IsAuthenticated).To(BeTrue())
+				Expect(protocol.AuthParams).To(Equal(authParams))
 			})
 
 			It("Should return error when authentication fails", func() {
-				expErr := fmt.Errorf("mock error")
-				protocol.Error = expErr
-				client := client.New("localhost:6020", protocol)
+				client, err := client.New("localhost:6020", protocol)
+				Expect(err).NotTo(HaveOccurred())
 				Expect(client).NotTo(BeNil())
 
-				err := client.Login()
+				expErr := fmt.Errorf("mock error")
+				protocol.Error = expErr
+
+				authParams := map[string]interface{}{
+					"user":     "x",
+					"password": "y",
+				}
+				err = client.Login(authParams)
 				Expect(err).To(HaveOccurred())
 				Expect(err).To(MatchError(expErr))
 
 				Expect(protocol.IsAuthenticated).To(BeFalse())
+				Expect(protocol.AuthParams).To(Equal(authParams))
 			})
-
 		})
 	})
 })

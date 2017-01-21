@@ -11,12 +11,13 @@ import "github.com/heynemann/deepstream.io-client-go/interfaces"
 
 //Client represents a connection to a deepstream.io server
 type Client struct {
-	URL      string
-	Protocol interfaces.Protocol
+	URL             string
+	Protocol        interfaces.Protocol
+	ConnectionState interfaces.ConnectionState
 }
 
 //New creates a new client
-func New(url string, protocolOrNil ...interfaces.Protocol) *Client {
+func New(url string, protocolOrNil ...interfaces.Protocol) (*Client, error) {
 	var proto interfaces.Protocol
 	if len(protocolOrNil) == 1 {
 		proto = protocolOrNil[0]
@@ -24,13 +25,38 @@ func New(url string, protocolOrNil ...interfaces.Protocol) *Client {
 	if proto == nil {
 		//TODO: load real protocol
 	}
-	return &Client{
-		URL:      url,
-		Protocol: proto,
+	cli := &Client{
+		URL:             url,
+		ConnectionState: interfaces.ConnectionStateClosed,
+		Protocol:        proto,
 	}
+
+	err := cli.Connect()
+	if err != nil {
+		return cli, err
+	}
+
+	return cli, nil
+}
+
+//Connect with deepstream.io server
+func (c *Client) Connect() error {
+	err := c.Protocol.Connect()
+	if err != nil {
+		return c.Error(err)
+	}
+
+	c.ConnectionState = interfaces.ConnectionStateAwaitingAuthentication
+	return nil
 }
 
 //Login with deepstream.io server
-func (c *Client) Login() error {
-	return c.Protocol.Authenticate()
+func (c *Client) Login(authParams map[string]interface{}) error {
+	return c.Protocol.Authenticate(authParams)
+}
+
+//Error handlers errors in client
+func (c *Client) Error(err error) error {
+	c.ConnectionState = interfaces.ConnectionStateError
+	return err
 }

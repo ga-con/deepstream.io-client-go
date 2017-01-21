@@ -10,7 +10,9 @@ package testing
 //MockProtocol should be used for unit tests
 type MockProtocol struct {
 	Error           error
+	HasConnected    bool
 	IsAuthenticated bool
+	AuthParams      map[string]interface{}
 }
 
 //NewMockProtocol returns a new MockProtocol
@@ -24,8 +26,20 @@ func NewMockProtocol(errOrNil ...error) *MockProtocol {
 	}
 }
 
+//Connect mocks connection
+func (m *MockProtocol) Connect() error {
+	if m.Error != nil {
+		return m.Error
+	}
+
+	m.HasConnected = true
+	return nil
+}
+
 //Authenticate mock protocol
-func (m *MockProtocol) Authenticate() error {
+func (m *MockProtocol) Authenticate(authParams map[string]interface{}) error {
+	m.AuthParams = authParams
+
 	if m.Error != nil {
 		return m.Error
 	}
