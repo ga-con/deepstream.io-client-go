@@ -54,3 +54,22 @@ func (m *Message) Parse() error {
 
 	return nil
 }
+
+//ParseMessages in a raw string
+func ParseMessages(raw string) ([]*Message, error) {
+	if raw == "" {
+		return nil, errors.ErrEmptyRawMessage
+	}
+
+	rawMessages := strings.Split(raw, interfaces.MessageSeparator)
+	messages := make([]*Message, len(rawMessages))
+	for i, rawMessage := range rawMessages {
+		message, err := NewMessage(rawMessage)
+		if err != nil {
+			return nil, err
+		}
+		messages[i] = message
+	}
+
+	return messages, nil
+}
