@@ -10,5 +10,6 @@ package interfaces
 //Protocol specifies the transport protocol for the client
 type Protocol interface {
 	Connect() error
+	Close() error
 	Authenticate(authParams map[string]interface{}) error
 }

@@ -10,6 +10,7 @@ package testing
 //MockProtocol should be used for unit tests
 type MockProtocol struct {
 	Error           error
+	IsClosed        bool
 	HasConnected    bool
 	IsAuthenticated bool
 	AuthParams      map[string]interface{}
@@ -46,5 +47,15 @@ func (m *MockProtocol) Authenticate(authParams map[string]interface{}) error {
 
 	m.IsAuthenticated = true
 
+	return nil
+}
+
+//Close mock connection
+func (m *MockProtocol) Close() error {
+	if m.Error != nil {
+		return m.Error
+	}
+
+	m.IsClosed = true
 	return nil
 }

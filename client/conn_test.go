@@ -45,6 +45,31 @@ var _ = Describe("Client Package", func() {
 					Expect(client.ConnectionState).To(Equal(interfaces.ConnectionStateError))
 					Expect(protocol.HasConnected).To(BeFalse())
 				})
+
+				It("Should close a connection", func() {
+					client, err := client.New("localhost:6020", protocol)
+					Expect(err).NotTo(HaveOccurred())
+
+					err = client.Close()
+					Expect(err).NotTo(HaveOccurred())
+					Expect(client.ConnectionState).To(Equal(interfaces.ConnectionStateClosed))
+
+					Expect(protocol.IsClosed).To(BeTrue())
+				})
+
+				It("Should error when closing a connection", func() {
+					client, err := client.New("localhost:6020", protocol)
+					Expect(err).NotTo(HaveOccurred())
+
+					expErr := fmt.Errorf("mock error")
+					protocol.Error = expErr
+					err = client.Close()
+					Expect(err).To(MatchError(expErr))
+					Expect(client.ConnectionState).To(Equal(interfaces.ConnectionStateError))
+
+					Expect(protocol.IsClosed).To(BeFalse())
+				})
+
 			})
 
 			Describe("Authentication", func() {

@@ -50,6 +50,17 @@ func (c *Client) Connect() error {
 	return nil
 }
 
+//Close connection to deepstream.io server
+func (c *Client) Close() error {
+	err := c.Protocol.Close()
+	if err != nil {
+		return c.Error(err)
+	}
+
+	c.ConnectionState = interfaces.ConnectionStateClosed
+	return nil
+}
+
 //Login with deepstream.io server
 func (c *Client) Login(authParams map[string]interface{}) error {
 	return c.Protocol.Authenticate(authParams)
