@@ -85,7 +85,7 @@ var _ = Describe("Message Package", func() {
 				Expect(err).NotTo(HaveOccurred())
 			})
 
-			Expect(runtime.Seconds()).Should(BeNumerically("<", 0.002), "Parsing messages shouldn't take too long.")
+			Expect(runtime.Seconds()).Should(BeNumerically("<", 0.01), "Parsing messages shouldn't take too long.")
 		}, 200)
 	})
 })
