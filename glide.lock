@@ -1,8 +1,10 @@
-hash: 8ce4b6d8b5e7eeed05dd9ff9b5e4b3eb7fe26ba46a5300e5c1b946c6d781b7dd
-updated: 2017-01-21T11:48:39.072228852-02:00
+hash: 8e77a8ae44ec04184aac35ec7fc58bd6ac79726fbfa227e13a180f436fb6604b
+updated: 2017-01-22T22:23:01.07068786-02:00
 imports:
 - name: github.com/gorilla/websocket
   version: 3ab3a8b8831546bd18fd182c20687ca853b2bb13
+- name: github.com/looplab/fsm
+  version: ee3b44fdc79755b3bb003c9bf637cf82bc364a69
 - name: github.com/onsi/ginkgo
   version: 462326b1628e124b23f42e87a8f2750e3c4e2d24
   subpackages:

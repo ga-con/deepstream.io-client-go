@@ -61,7 +61,16 @@ const ConnectionStateClosed ConnectionState = "CLOSED"
 //ConnectionStateAwaitingConnection indicates the connection is waiting for a connection
 const ConnectionStateAwaitingConnection ConnectionState = "AWAITING_CONNECTION"
 
-//ConnectionStateChallenging indicates the connection is being challenged for credentials
+//ConnectionStateConnecting indicates the client is opening the connection to the server
+const ConnectionStateConnecting ConnectionState = "CONNECTING"
+
+//ConnectionStateConnected indicates the client has connected to the websocket
+const ConnectionStateConnected ConnectionState = "CONNECTED"
+
+//ConnectionStateChallengeReceived indicates the connection is being challenged for credentials
+const ConnectionStateChallengeReceived ConnectionState = "CHALLENGED"
+
+//ConnectionStateChallenging indicates the client is acknowleding the challenge
 const ConnectionStateChallenging ConnectionState = "CHALLENGING"
 
 //ConnectionStateAwaitingAuthentication indicates the connection is waiting for authentication

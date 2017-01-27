@@ -38,33 +38,6 @@ func (w *WebsocketProtocol) Connect() error {
 	}
 
 	w.Client = c
-
-	err = w.getAuthChallenge()
-	if err != nil {
-		return err
-	}
-	return nil
-}
-
-func (w *WebsocketProtocol) getAuthChallenge() error {
-	_, body, err := w.Client.ReadMessage()
-	if err != nil {
-		return err
-	}
-	msgs, err := message.ParseMessages(string(body))
-	if len(msgs) != 1 {
-		//TODO: Change this
-		return fmt.Errorf("authentication challenge expected")
-	}
-	msg := msgs[0]
-	action, err := message.CathegorizeAction(msg)
-	if err != nil {
-		return err
-	}
-	if _, ok := action.(*message.ChallengeAction); !ok {
-		return fmt.Errorf("authentication challenge expected 2")
-	}
-
 	return nil
 }
 
