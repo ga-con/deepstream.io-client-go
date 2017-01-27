@@ -21,9 +21,11 @@ var _ = Describe("Client Package", func() {
 	Describe("[Unit]", func() {
 		Describe("Client", func() {
 			var protocol *testing.MockProtocol
+			var connection *testing.MockConnection
 
 			BeforeEach(func() {
 				protocol = testing.NewMockProtocol()
+				connection = testing.NewMockConnection()
 			})
 
 			Describe("Connection", func() {
@@ -111,7 +113,7 @@ var _ = Describe("Client Package", func() {
 			})
 		})
 	})
-	Describe("[Integration]", func() {
+	FDescribe("[Integration]", func() {
 		Describe("Client", func() {
 			Describe("Connection", func() {
 				It("Should create a client", func() {

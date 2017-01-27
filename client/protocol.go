@@ -15,39 +15,39 @@ import (
 	"github.com/heynemann/deepstream.io-client-go/message"
 )
 
-//WebsocketProtocol is the default protocol for deepstream.io
-type WebsocketProtocol struct {
-	URL    string
-	Client *websocket.Conn
+//DeepstreamProtocol is the default protocol for deepstream.io
+type DeepstreamProtocol struct {
+	Connection interfaces.Connection
 }
 
-//NewWebsocketProtocol creates a new instance
-func NewWebsocketProtocol(url string) (*WebsocketProtocol, error) {
-	ws := &WebsocketProtocol{
-		URL: url,
+//NewDeepstreamProtocol creates a new instance
+func NewDeepstreamProtocol(connection interfaces.Connection) (*DeepstreamProtocol, error) {
+	dsp := &DeepstreamProtocol{
+		Connection: connection,
 	}
-	return ws, nil
+	return dsp, nil
 }
 
 //Connect to deepstream.io
-func (w *WebsocketProtocol) Connect() error {
-	url := fmt.Sprintf("ws://%s/deepstream", w.URL)
-	c, _, err := websocket.DefaultDialer.Dial(url, nil)
-	if err != nil {
-		return err
-	}
+//func (w *DeepstreamProtocol) Connect() error {
+//url := fmt.Sprintf("ws://%s/deepstream", w.URL)
+//c, _, err := websocket.DefaultDialer.Dial(url, nil)
+//if err != nil {
+//return err
+//}
 
-	w.Client = c
+//w.Client = c
 
-	err = w.getAuthChallenge()
-	if err != nil {
-		return err
-	}
-	return nil
-}
+//err = w.getAuthChallenge()
+//if err != nil {
+//return err
+//}
+//return nil
+//}
 
-func (w *WebsocketProtocol) getAuthChallenge() error {
-	_, body, err := w.Client.ReadMessage()
+//GetAuthChallenge receives the message from deepstream ensuring the auth challenge has been met
+func (w *DeepstreamProtocol) GetAuthChallenge() error {
+	body, err := w.Connection.ReceiveMessage()
 	if err != nil {
 		return err
 	}
@@ -69,7 +69,7 @@ func (w *WebsocketProtocol) getAuthChallenge() error {
 }
 
 //Close websocket connection
-func (w *WebsocketProtocol) Close() error {
+func (w *DeepstreamProtocol) Close() error {
 	if w.Client == nil {
 		return nil
 	}
@@ -84,7 +84,7 @@ func (w *WebsocketProtocol) Close() error {
 }
 
 //SendAction writes an action in the websocket stream
-func (w *WebsocketProtocol) SendAction(action interfaces.Action) error {
+func (w *DeepstreamProtocol) SendAction(action interfaces.Action) error {
 	msg := action.ToAction()
 	err := w.Client.WriteMessage(websocket.TextMessage, []byte(msg))
 	if err != nil {
@@ -94,7 +94,7 @@ func (w *WebsocketProtocol) SendAction(action interfaces.Action) error {
 }
 
 //RecvActions receives actions from the websocket stream
-func (w *WebsocketProtocol) RecvActions() ([]interfaces.Action, error) {
+func (w *DeepstreamProtocol) RecvActions() ([]interfaces.Action, error) {
 	_, body, err := w.Client.ReadMessage()
 	if err != nil {
 		return nil, err

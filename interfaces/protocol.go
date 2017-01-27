@@ -9,7 +9,7 @@ package interfaces
 
 //Protocol specifies the transport protocol for the client
 type Protocol interface {
-	Connect() error
+	GetAuthChallenge() error
 	Close() error
 	SendAction(action Action) error
 	RecvActions() ([]Action, error)
