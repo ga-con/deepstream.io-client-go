@@ -223,6 +223,8 @@ func (c *Client) handleAuthenticationMessages(msg *message.Message) error {
 		if c.Connector.ConnectionState == interfaces.ConnectionStateAuthenticating {
 			return c.handleAuthenticationAck(msg)
 		}
+	case msg.Action == "E":
+		return c.Error(fmt.Errorf("Could not connect to deepstream.io server with the provided credentials (user: %s).", c.AuthParams["user"]))
 	default:
 		fmt.Println("Message not understood!")
 	}
@@ -333,8 +335,8 @@ func (c *Client) handleAuthenticationAck(msg *message.Message) error {
 //return nil
 //}
 
-////Error handlers errors in client
-//func (c *Client) Error(err error) error {
-//c.ConnectionState = interfaces.ConnectionStateError
-//return err
-//}
+//Error handlers errors in client
+func (c *Client) Error(err error) error {
+	c.Connector.ConnectionState = interfaces.ConnectionStateError
+	return err
+}

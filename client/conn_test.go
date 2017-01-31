@@ -146,6 +146,14 @@ var _ = Describe("Client Package", func() {
 					time.Sleep(10 * time.Millisecond)
 					Expect(cl.GetConnectionState()).To(Equal(interfaces.ConnectionStateOpen))
 				})
+
+				It("Should create a disconnected client if invalid auth", func() {
+					cl, err := client.New("localhost:6020", "qwe", "password!")
+					time.Sleep(10 * time.Millisecond)
+					Expect(err).NotTo(HaveOccurred())
+					Expect(cl).NotTo(BeNil())
+					Expect(cl.GetConnectionState()).To(Equal(interfaces.ConnectionStateError))
+				})
 			})
 
 			//Describe("Authentication", func() {
