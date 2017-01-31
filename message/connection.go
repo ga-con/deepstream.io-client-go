@@ -8,6 +8,7 @@
 package message
 
 import (
+	"encoding/json"
 	"fmt"
 
 	"github.com/heynemann/deepstream.io-client-go/interfaces"
@@ -73,12 +74,12 @@ type AuthRequestAction struct {
 	AuthParams string
 }
 
-func NewAuthRequestAction(msg *Message) (*AuthRequestAction, error) {
-	authParams := ""
-	if len(msg.RawData) > 0 {
-		authParams = msg.RawData[0]
+func NewAuthRequestAction(authParams map[string]interface{}) (*AuthRequestAction, error) {
+	data, err := json.Marshal(authParams)
+	if err != nil {
+		return nil, err
 	}
-	return &AuthRequestAction{AuthParams: authParams}, nil
+	return &AuthRequestAction{AuthParams: string(data)}, nil
 }
 
 func (a *AuthRequestAction) ToAction() string {
