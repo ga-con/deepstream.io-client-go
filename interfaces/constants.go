@@ -55,6 +55,9 @@ const ServerStateClosed = "closed"
 //ConnectionState indicates the possible connection states
 type ConnectionState string
 
+//ConnectionStateInitializing indicates the connection has just been created
+const ConnectionStateInitializing ConnectionState = "INITIALIZING"
+
 //ConnectionStateClosed indicates the connection has been closed
 const ConnectionStateClosed ConnectionState = "CLOSED"
 

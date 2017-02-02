@@ -5,7 +5,7 @@
 // http://www.opensource.org/licenses/mit-license
 // Copyright © 2017 Bernardo Heynemann <heynemann@gmail.com>
 
-package client_test
+package deepstream_test
 
 import (
 	. "github.com/onsi/ginkgo"
@@ -14,7 +14,7 @@ import (
 	"testing"
 )
 
-func TestClient(t *testing.T) {
+func TestDeepstream(t *testing.T) {
 	RegisterFailHandler(Fail)
-	RunSpecs(t, "Client Suite")
+	RunSpecs(t, "Deepstream Suite")
 }
