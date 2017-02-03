@@ -1,5 +1,5 @@
-hash: 8ce4b6d8b5e7eeed05dd9ff9b5e4b3eb7fe26ba46a5300e5c1b946c6d781b7dd
-updated: 2017-01-21T11:48:39.072228852-02:00
+hash: 6d9db4b9b1ecd8357cb9be887d25c37724dd62837275c11cff6d1c5959f01ff9
+updated: 2017-02-02T21:42:47.210193033-02:00
 imports:
 - name: github.com/gorilla/websocket
   version: 3ab3a8b8831546bd18fd182c20687ca853b2bb13
@@ -33,6 +33,8 @@ imports:
   - matchers/support/goraph/node
   - matchers/support/goraph/util
   - types
+- name: github.com/satori/go.uuid
+  version: 879c5887cd475cd7864858769793b2ceb0d44feb
 testImports:
 - name: github.com/DATA-DOG/godog
   version: 2e189ad0f9dee046e42bb5f04a7ec5e91ec0700e

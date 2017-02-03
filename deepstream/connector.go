@@ -13,11 +13,10 @@ import (
 
 	"github.com/gorilla/websocket"
 	"github.com/heynemann/deepstream.io-client-go/interfaces"
-	"github.com/heynemann/deepstream.io-client-go/message"
 )
 
 //OnMessageHandler represents a function that takes a message and does something
-type OnMessageHandler func(*message.Message)
+type OnMessageHandler func(*Message)
 
 //Connector is an abstraction to the web socket connection to deepstream
 type Connector struct {
@@ -62,7 +61,7 @@ func (c *Connector) Connect() error {
 			}
 
 			func() {
-				messages, err := message.ParseMessages(string(msgBytes))
+				messages, err := ParseMessages(string(msgBytes))
 				if err != nil {
 					//onErr?
 					return
@@ -91,7 +90,7 @@ func (c *Connector) AddMessageHandler(handler OnMessageHandler) {
 }
 
 //OnMessage ensures all handlers are called
-func (c *Connector) OnMessage(msg *message.Message) {
+func (c *Connector) OnMessage(msg *Message) {
 	for _, handler := range c.MessageHandlers {
 		handler(msg)
 	}

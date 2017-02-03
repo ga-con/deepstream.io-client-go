@@ -11,7 +11,6 @@ import (
 	"fmt"
 
 	"github.com/heynemann/deepstream.io-client-go/interfaces"
-	"github.com/heynemann/deepstream.io-client-go/message"
 )
 
 //ClientOptions used to connect to deepstream
@@ -38,6 +37,7 @@ type Client struct {
 	Connector      *Connector
 	Options        *ClientOptions
 	loginRequested bool
+	Event          *EventManager
 }
 
 //New creates a new client
@@ -61,6 +61,7 @@ func New(url string, optionsOrNil ...*ClientOptions) (*Client, error) {
 		AuthParams:     authParams,
 		loginRequested: false,
 	}
+	cli.Event = NewEventManager(cli)
 
 	cli.Connector.AddMessageHandler(cli.onMessage)
 
@@ -80,7 +81,7 @@ func (c *Client) startMonitoringConnection() error {
 	return nil
 }
 
-func (c *Client) onMessage(msg *message.Message) {
+func (c *Client) onMessage(msg *Message) {
 	//fmt.Println(msg.Topic, msg.Action)
 	var err error
 	switch {
@@ -88,6 +89,8 @@ func (c *Client) onMessage(msg *message.Message) {
 		err = c.handleConnectionMessages(msg)
 	case msg.Topic == "A":
 		err = c.handleAuthenticationMessages(msg)
+	case msg.Topic == "E":
+		err = c.handleEventMessages(msg)
 	}
 
 	if err != nil {
@@ -100,7 +103,7 @@ func (c *Client) GetConnectionState() interfaces.ConnectionState {
 	return c.Connector.ConnectionState
 }
 
-func (c *Client) handleConnectionMessages(msg *message.Message) error {
+func (c *Client) handleConnectionMessages(msg *Message) error {
 	switch {
 	case msg.Action == "CH":
 		return c.handleChallengeRequest(msg)
@@ -115,13 +118,13 @@ func (c *Client) handleConnectionMessages(msg *message.Message) error {
 	return nil
 }
 
-func (c *Client) handleChallengeRequest(msg *message.Message) error {
+func (c *Client) handleChallengeRequest(msg *Message) error {
 	c.Connector.ConnectionState = interfaces.ConnectionStateChallenging
-	challenge := message.NewChallengeResponseAction(c.Connector.URL)
+	challenge := NewChallengeResponseAction(c.Connector.URL)
 	return c.Connector.WriteMessage([]byte(challenge.ToAction()))
 }
 
-func (c *Client) handleChallengeAck(msg *message.Message) error {
+func (c *Client) handleChallengeAck(msg *Message) error {
 	c.Connector.ConnectionState = interfaces.ConnectionStateAwaitingConnection
 	if c.Options.AutoLogin || c.loginRequested {
 		return c.Login()
@@ -144,7 +147,7 @@ func (c *Client) Login() error {
 
 	c.loginRequested = false
 
-	authRequestAction, err := message.NewAuthRequestAction(c.AuthParams)
+	authRequestAction, err := NewAuthRequestAction(c.AuthParams)
 	if err != nil {
 		return err
 	}
@@ -155,7 +158,7 @@ func (c *Client) Login() error {
 	return c.Connector.WriteMessage([]byte(authRequestAction.ToAction()))
 }
 
-func (c *Client) handleAuthenticationMessages(msg *message.Message) error {
+func (c *Client) handleAuthenticationMessages(msg *Message) error {
 	switch {
 	case msg.Action == "A":
 		if c.Connector.ConnectionState == interfaces.ConnectionStateAuthenticating {
@@ -170,8 +173,19 @@ func (c *Client) handleAuthenticationMessages(msg *message.Message) error {
 	return nil
 }
 
-func (c *Client) handleAuthenticationAck(msg *message.Message) error {
+func (c *Client) handleAuthenticationAck(msg *Message) error {
 	c.Connector.ConnectionState = interfaces.ConnectionStateOpen
+	return nil
+}
+
+func (c *Client) handleEventMessages(msg *Message) error {
+	switch {
+	case msg.Action == "A":
+		return c.Event.handleEventSubscriptionAck(msg)
+	default:
+		fmt.Println("Message not understood!")
+	}
+
 	return nil
 }
 

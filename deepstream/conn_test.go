@@ -14,6 +14,7 @@ import (
 	"github.com/heynemann/deepstream.io-client-go/interfaces"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	uuid "github.com/satori/go.uuid"
 )
 
 var _ = Describe("deepstream Package", func() {
@@ -23,15 +24,18 @@ var _ = Describe("deepstream Package", func() {
 	})
 
 	Describe("[Integration]", func() {
+		var authOpts *deepstream.ClientOptions
+		BeforeEach(func() {
+			authOpts = deepstream.DefaultOptions()
+			authOpts.AutoLogin = true
+			authOpts.Username = "userA"
+			authOpts.Password = "password"
+		})
+
 		Describe("Client", func() {
 			Describe("Connection", func() {
 				It("Should create a connected client", func() {
-					opts := deepstream.DefaultOptions()
-					opts.AutoLogin = true
-					opts.Username = "userA"
-					opts.Password = "password"
-
-					cl, err := deepstream.New("localhost:6020", opts)
+					cl, err := deepstream.New("localhost:6020", authOpts)
 					Expect(err).NotTo(HaveOccurred())
 					time.Sleep(10 * time.Millisecond)
 
@@ -98,6 +102,48 @@ var _ = Describe("deepstream Package", func() {
 					Expect(cl.GetConnectionState()).To(Equal(interfaces.ConnectionStateInitializing))
 					time.Sleep(10 * time.Millisecond)
 					Expect(cl.GetConnectionState()).To(Equal(interfaces.ConnectionStateOpen))
+				})
+			})
+
+			Describe("Events", func() {
+				var client *deepstream.Client
+				BeforeEach(func() {
+					var err error
+					client, err = deepstream.New("localhost:6020", authOpts)
+					Expect(err).NotTo(HaveOccurred())
+					time.Sleep(10 * time.Millisecond)
+				})
+
+				Describe("Subscriptions", func() {
+					It("Should subscribe to events", func() {
+						onMessage := func() {}
+						topic := uuid.NewV4().String()
+						client.Event.Subscribe(topic, onMessage)
+						Expect(client.Event.Subscriptions[topic].Event).To(Equal(topic))
+						Expect(client.Event.Subscriptions[topic].Handlers).To(HaveLen(1))
+						Expect(client.Event.Subscriptions[topic].Acked).To(BeFalse())
+
+						time.Sleep(10 * time.Millisecond)
+
+						Expect(client.Event.Subscriptions[topic].Acked).To(BeTrue())
+					})
+
+					It("Should subscribe twice only causes one trip to the server", func() {
+						onMessage := func() {}
+						topic := uuid.NewV4().String()
+						client.Event.Subscribe(topic, onMessage)
+
+						time.Sleep(10 * time.Millisecond)
+						Expect(client.Event.Subscriptions[topic].Acked).To(BeTrue())
+
+						client.Event.Subscriptions[topic].Acked = false
+						client.Event.Subscribe(topic, onMessage)
+
+						time.Sleep(10 * time.Millisecond)
+						//Did not go to deepstream server again, thus did not receive another ack
+						Expect(client.Event.Subscriptions[topic].Acked).To(BeFalse())
+						Expect(client.Event.Subscriptions[topic].Handlers).To(HaveLen(2))
+					})
 				})
 			})
 		})
