@@ -10,6 +10,8 @@ package deepstream
 import (
 	"encoding/json"
 	"fmt"
+	"strconv"
+	"strings"
 
 	"github.com/heynemann/deepstream.io-client-go/interfaces"
 )
@@ -62,10 +64,12 @@ func (a *AuthRequestAction) ToAction() string {
 	)
 }
 
+//SubscribeToEventAction sends a message to deepstream to subscribe to a given event
 type SubscribeToEventAction struct {
 	Event string
 }
 
+//ToAction converts to the action to be sent to the server
 func (a *SubscribeToEventAction) ToAction() string {
 	return fmt.Sprintf(
 		"E%sS%s%s%s",
@@ -74,4 +78,100 @@ func (a *SubscribeToEventAction) ToAction() string {
 		a.Event,
 		interfaces.MessageSeparator,
 	)
+}
+
+//PublishEventAction sends a message to deepstream to publish an event
+type PublishEventAction struct {
+	Event string
+	Data  []interface{}
+}
+
+func serializeData(source []interface{}) ([]string, error) {
+	data := make([]string, len(source))
+
+	for i, item := range source {
+		if item == nil {
+			data[i] = "L"
+			continue
+		}
+
+		switch t := item.(type) {
+		default:
+			marsh, err := json.Marshal(t)
+			if err != nil {
+				return nil, err
+			}
+			data[i] = fmt.Sprintf("O%s", marsh)
+		case string:
+			data[i] = fmt.Sprintf("S%s", t)
+		case bool:
+			data[i] = "F"
+			if t {
+				data[i] = "T"
+			}
+		case int, int16, int32, int64, uint, float32, float64:
+			data[i] = fmt.Sprintf("N%d", t)
+		case *string:
+			data[i] = fmt.Sprintf("S%s", *t)
+		case *bool:
+			data[i] = "F"
+			if *t {
+				data[i] = "T"
+			}
+		}
+	}
+
+	return data, nil
+}
+
+func deserializeData(source []string) ([]interface{}, error) {
+	data := make([]interface{}, len(source))
+
+	for i, item := range source {
+		switch item[0] {
+		case 'L':
+			data[i] = nil
+		case 'O':
+			var obj interface{}
+			err := json.Unmarshal([]byte(item[1:]), &obj)
+			if err != nil {
+				return nil, err
+			}
+			data[i] = obj
+		case 'S':
+			data[i] = item[1:]
+		case 'F':
+			data[i] = false
+		case 'T':
+			data[i] = true
+		case 'N':
+			num, err := strconv.ParseFloat(item[1:], 64)
+			if err != nil {
+				return nil, err
+			}
+			data[i] = num
+		}
+	}
+
+	return data, nil
+}
+
+//ToAction converts to the action to be sent to the server
+func (a *PublishEventAction) ToAction() (string, error) {
+	data, err := serializeData(a.Data)
+	if err != nil {
+		return "", err
+	}
+
+	dataStr := strings.Join(data, interfaces.MessagePartSeparator)
+
+	return fmt.Sprintf(
+		"E%sEVT%s%s%s%s%s",
+		interfaces.MessagePartSeparator,
+		interfaces.MessagePartSeparator,
+		a.Event,
+		interfaces.MessagePartSeparator,
+		dataStr,
+		interfaces.MessageSeparator,
+	), nil
 }

@@ -81,8 +81,13 @@ func (c *Client) startMonitoringConnection() error {
 	return nil
 }
 
+//GetConnectionState returns the connection state for the connector
+func (c *Client) GetConnectionState() interfaces.ConnectionState {
+	return c.Connector.ConnectionState
+}
+
 func (c *Client) onMessage(msg *Message) {
-	//fmt.Println(msg.Topic, msg.Action)
+	//fmt.Println("Incoming message", msg.Topic, msg.Action, msg.Data)
 	var err error
 	switch {
 	case msg.Topic == "C":
@@ -96,11 +101,6 @@ func (c *Client) onMessage(msg *Message) {
 	if err != nil {
 		//On error?
 	}
-}
-
-//GetConnectionState returns the connection state for the connector
-func (c *Client) GetConnectionState() interfaces.ConnectionState {
-	return c.Connector.ConnectionState
 }
 
 func (c *Client) handleConnectionMessages(msg *Message) error {
@@ -182,6 +182,8 @@ func (c *Client) handleEventMessages(msg *Message) error {
 	switch {
 	case msg.Action == "A":
 		return c.Event.handleEventSubscriptionAck(msg)
+	case msg.Action == "EVT":
+		return c.Event.handleEventMessageReceived(msg)
 	default:
 		fmt.Println("Message not understood!")
 	}

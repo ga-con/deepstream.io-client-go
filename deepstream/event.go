@@ -7,10 +7,19 @@
 
 package deepstream
 
-import "fmt"
+import (
+	"fmt"
+	"strings"
+)
+
+//EventMessage represents a message received due to a subscription
+type EventMessage struct {
+	Event string
+	Data  []interface{}
+}
 
 //EventHandler is the function type for all event handlers
-type EventHandler func()
+type EventHandler func(*EventMessage) error
 
 //EventSubscription represents a subscription to a given event
 type EventSubscription struct {
@@ -71,5 +80,56 @@ func (e *EventManager) handleEventSubscriptionAck(msg *Message) error {
 			return fmt.Errorf("Received subscription confirmation for unknown subscription: %s", event)
 		}
 	}
+	return nil
+}
+
+//Publish an event to deepstream.io
+func (e *EventManager) Publish(event string, data ...interface{}) error {
+	action := &PublishEventAction{
+		Event: event,
+		Data:  data,
+	}
+
+	actionData, err := action.ToAction()
+	if err != nil {
+		return err
+	}
+	return e.client.Connector.WriteMessage([]byte(actionData))
+}
+
+func (e *EventManager) handleEventMessageReceived(msg *Message) error {
+	event := msg.Data[0]
+	if _, ok := e.Subscriptions[event]; !ok {
+		return nil
+	}
+
+	var err error
+	eventData := []interface{}{}
+	if len(msg.Data) > 1 {
+		eventData, err = deserializeData(msg.Data[1:])
+		if err != nil {
+			return err
+		}
+	}
+	eventMessage := EventMessage{
+		Event: event,
+		Data:  eventData,
+	}
+
+	var errors []string
+	for _, handler := range e.Subscriptions[event].Handlers {
+		err = handler(&eventMessage)
+		if err != nil {
+			errors = append(errors, err.Error())
+		}
+	}
+
+	if len(errors) > 0 {
+		return fmt.Errorf(
+			"Errors happened upon receiving event: %s",
+			strings.Join(errors, ", "),
+		)
+	}
+
 	return nil
 }

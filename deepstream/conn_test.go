@@ -116,7 +116,7 @@ var _ = Describe("deepstream Package", func() {
 
 				Describe("Subscriptions", func() {
 					It("Should subscribe to events", func() {
-						onMessage := func() {}
+						onMessage := func(msg *deepstream.EventMessage) error { return nil }
 						topic := uuid.NewV4().String()
 						client.Event.Subscribe(topic, onMessage)
 						Expect(client.Event.Subscriptions[topic].Event).To(Equal(topic))
@@ -129,7 +129,7 @@ var _ = Describe("deepstream Package", func() {
 					})
 
 					It("Should subscribe twice only causes one trip to the server", func() {
-						onMessage := func() {}
+						onMessage := func(msg *deepstream.EventMessage) error { return nil }
 						topic := uuid.NewV4().String()
 						client.Event.Subscribe(topic, onMessage)
 
@@ -143,6 +143,37 @@ var _ = Describe("deepstream Package", func() {
 						//Did not go to deepstream server again, thus did not receive another ack
 						Expect(client.Event.Subscriptions[topic].Acked).To(BeFalse())
 						Expect(client.Event.Subscriptions[topic].Handlers).To(HaveLen(2))
+					})
+				})
+
+				Describe("Publishing", func() {
+					It("Should publish events", func() {
+						_client, err := deepstream.New("localhost:6020", authOpts)
+						Expect(err).NotTo(HaveOccurred())
+						time.Sleep(10 * time.Millisecond)
+
+						var msg *deepstream.EventMessage
+						onMessage := func(_msg *deepstream.EventMessage) error {
+							msg = _msg
+							return nil
+						}
+						topic := uuid.NewV4().String()
+						_client.Event.Subscribe(topic, onMessage)
+						time.Sleep(10 * time.Millisecond)
+
+						m := map[string]interface{}{"qwe": 123}
+						err = client.Event.Publish(topic, "yetAnotherValue", 10, true, false, m)
+						Expect(err).NotTo(HaveOccurred())
+						time.Sleep(10 * time.Millisecond)
+
+						Expect(msg).NotTo(BeNil())
+						Expect(msg.Data[0]).To(BeEquivalentTo("yetAnotherValue"))
+						Expect(msg.Data[1]).To(BeEquivalentTo(10))
+						Expect(msg.Data[2]).To(BeTrue())
+						Expect(msg.Data[3]).To(BeFalse())
+
+						obj := msg.Data[4].(map[string]interface{})
+						Expect(obj["qwe"]).To(BeEquivalentTo(123))
 					})
 				})
 			})
