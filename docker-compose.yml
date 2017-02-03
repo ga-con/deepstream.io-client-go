@@ -7,9 +7,3 @@ services:
             - "6021:6021"
         volumes:
             - ./conf:/etc/deepstream
-        depends_on:
-            - redis
-    redis:
-        image: redis:alpine
-        ports:
-            - "6379"

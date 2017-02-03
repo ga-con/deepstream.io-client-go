@@ -15,19 +15,25 @@ import (
 
 //ClientOptions used to connect to deepstream
 type ClientOptions struct {
-	AutoReconnect bool
-	AutoLogin     bool
-	Username      string
-	Password      string
+	AutoReconnect       bool
+	AutoLogin           bool
+	ConnectionTimeoutMs int
+	WriteTimeoutMs      int
+	ReadTimeoutMs       int
+	Username            string
+	Password            string
 }
 
 //DefaultOptions to connect to deepstream
 func DefaultOptions() *ClientOptions {
 	return &ClientOptions{
-		AutoReconnect: true,
-		AutoLogin:     true,
-		Username:      "",
-		Password:      "",
+		AutoReconnect:       true,
+		AutoLogin:           true,
+		Username:            "",
+		Password:            "",
+		ConnectionTimeoutMs: 100,
+		WriteTimeoutMs:      100,
+		ReadTimeoutMs:       100,
 	}
 }
 
@@ -55,8 +61,9 @@ func New(url string, optionsOrNil ...*ClientOptions) (*Client, error) {
 			"password": password,
 		}
 	}
+	conn := NewConnector(url, options.ConnectionTimeoutMs, options.WriteTimeoutMs, options.ReadTimeoutMs)
 	cli := &Client{
-		Connector:      NewConnector(url),
+		Connector:      conn,
 		Options:        options,
 		AuthParams:     authParams,
 		loginRequested: false,
@@ -87,7 +94,6 @@ func (c *Client) GetConnectionState() interfaces.ConnectionState {
 }
 
 func (c *Client) onMessage(msg *Message) {
-	//fmt.Println("Incoming message", msg.Topic, msg.Action, msg.Data)
 	var err error
 	switch {
 	case msg.Topic == "C":

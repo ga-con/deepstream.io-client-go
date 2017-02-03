@@ -35,7 +35,7 @@ var _ = Describe("deepstream Package", func() {
 		Describe("Client", func() {
 			Describe("Connection", func() {
 				It("Should create a connected client", func() {
-					cl, err := deepstream.New("localhost:6020", authOpts)
+					cl, err := deepstream.New("127.0.0.1:6020", authOpts)
 					Expect(err).NotTo(HaveOccurred())
 					time.Sleep(10 * time.Millisecond)
 
@@ -48,7 +48,7 @@ var _ = Describe("deepstream Package", func() {
 					opts.AutoLogin = false
 					opts.Username = "userA"
 					opts.Password = "password"
-					cl, err := deepstream.New("localhost:6020", opts)
+					cl, err := deepstream.New("127.0.0.1:6020", opts)
 					Expect(err).NotTo(HaveOccurred())
 
 					time.Sleep(10 * time.Millisecond)
@@ -60,7 +60,7 @@ var _ = Describe("deepstream Package", func() {
 					opts := deepstream.DefaultOptions()
 					opts.Username = "invalid-user"
 					opts.Password = "invalid-pass"
-					cl, err := deepstream.New("localhost:6020", opts)
+					cl, err := deepstream.New("127.0.0.1:6020", opts)
 					Expect(err).NotTo(HaveOccurred())
 
 					time.Sleep(10 * time.Millisecond)
@@ -76,7 +76,7 @@ var _ = Describe("deepstream Package", func() {
 					opts.Username = "userA"
 					opts.Password = "password"
 
-					cl, err := deepstream.New("localhost:6020", opts)
+					cl, err := deepstream.New("127.0.0.1:6020", opts)
 					Expect(err).NotTo(HaveOccurred())
 
 					time.Sleep(10 * time.Millisecond)
@@ -95,7 +95,7 @@ var _ = Describe("deepstream Package", func() {
 					opts.Username = "userA"
 					opts.Password = "password"
 
-					cl, err := deepstream.New("localhost:6020", opts)
+					cl, err := deepstream.New("127.0.0.1:6020", opts)
 					Expect(err).NotTo(HaveOccurred())
 
 					err = cl.Login()
@@ -109,7 +109,7 @@ var _ = Describe("deepstream Package", func() {
 				var client *deepstream.Client
 				BeforeEach(func() {
 					var err error
-					client, err = deepstream.New("localhost:6020", authOpts)
+					client, err = deepstream.New("127.0.0.1:6020", authOpts)
 					Expect(err).NotTo(HaveOccurred())
 					time.Sleep(10 * time.Millisecond)
 				})
@@ -148,7 +148,7 @@ var _ = Describe("deepstream Package", func() {
 
 				Describe("Publishing", func() {
 					It("Should publish events", func() {
-						_client, err := deepstream.New("localhost:6020", authOpts)
+						_client, err := deepstream.New("127.0.0.1:6020", authOpts)
 						Expect(err).NotTo(HaveOccurred())
 						time.Sleep(10 * time.Millisecond)
 

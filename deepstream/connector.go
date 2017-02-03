@@ -10,6 +10,7 @@ package deepstream
 import (
 	"fmt"
 	"sync"
+	"time"
 
 	"github.com/gorilla/websocket"
 	"github.com/heynemann/deepstream.io-client-go/interfaces"
@@ -20,27 +21,36 @@ type OnMessageHandler func(*Message)
 
 //Connector is an abstraction to the web socket connection to deepstream
 type Connector struct {
-	URL             string
-	ConnectionLock  *sync.Mutex
-	ConnectionState interfaces.ConnectionState
-	Client          *websocket.Conn
-	MessageHandlers []OnMessageHandler
+	URL                 string
+	ConnectionTimeoutMs int
+	WriteTimeoutMs      int
+	ReadTimeoutMs       int
+	ConnectionLock      *sync.Mutex
+	ConnectionState     interfaces.ConnectionState
+	Client              *websocket.Conn
+	MessageHandlers     []OnMessageHandler
 }
 
 //NewConnector creates a new connector to the specified Deepstream server url
-func NewConnector(url string) *Connector {
+func NewConnector(url string, connectionTimeoutMs, writeTimeoutMs, readTimeoutMs int) *Connector {
 	return &Connector{
-		ConnectionLock:  &sync.Mutex{},
-		MessageHandlers: []OnMessageHandler{},
-		Client:          nil,
-		ConnectionState: interfaces.ConnectionStateInitializing,
-		URL:             url,
+		ConnectionTimeoutMs: connectionTimeoutMs,
+		WriteTimeoutMs:      writeTimeoutMs,
+		ReadTimeoutMs:       readTimeoutMs,
+		ConnectionLock:      &sync.Mutex{},
+		MessageHandlers:     []OnMessageHandler{},
+		Client:              nil,
+		ConnectionState:     interfaces.ConnectionStateInitializing,
+		URL:                 url,
 	}
 }
 
 //Connect to deepstream using websocket and starts monitoring traffic in the background
 func (c *Connector) Connect() error {
 	url := fmt.Sprintf("ws://%s/deepstream", c.URL)
+
+	dialer := websocket.DefaultDialer
+	dialer.HandshakeTimeout = time.Duration(c.ConnectionTimeoutMs) * time.Millisecond
 	client, _, err := websocket.DefaultDialer.Dial(url, nil)
 	if err != nil {
 		return err
@@ -50,9 +60,11 @@ func (c *Connector) Connect() error {
 
 	go func() {
 		for {
+			//c.Client.SetReadDeadline(time.Now().Add(time.Duration(c.ReadTimeoutMs) * time.Millisecond))
 			messageType, msgBytes, err := c.Client.ReadMessage()
 			if err != nil {
-				return
+				//ON ERROR?
+				continue
 			}
 			if messageType == websocket.BinaryMessage {
 				//ON ERROR?
@@ -98,6 +110,7 @@ func (c *Connector) OnMessage(msg *Message) {
 
 //WriteMessage sends a message to deepstream websocket connection using text
 func (c *Connector) WriteMessage(msg []byte, msgTypeOrNil ...int) error {
+	c.Client.SetWriteDeadline(time.Now().Add(300 * time.Millisecond))
 	msgType := websocket.TextMessage
 	if len(msgTypeOrNil) == 1 {
 		msgType = msgTypeOrNil[1]

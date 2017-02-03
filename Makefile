@@ -39,7 +39,10 @@ acceptance:
 	@godog
 
 dependencies deps:
-	@docker-compose -p deepstream-golang up -d
+	@docker-compose -p deepstream-golang up --remove-orphans -d
+
+logs:
+	@docker-compose -p deepstream-golang logs
 
 stop-deps:
 	@docker-compose -p deepstream-golang stop
