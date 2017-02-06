@@ -40,7 +40,7 @@ func NewConnector(url string, connectionTimeoutMs, writeTimeoutMs, readTimeoutMs
 		ConnectionLock:      &sync.Mutex{},
 		MessageHandlers:     []OnMessageHandler{},
 		Client:              nil,
-		ConnectionState:     interfaces.ConnectionStateInitializing,
+		ConnectionState:     interfaces.ConnectionStateAwaitingConnection,
 		URL:                 url,
 	}
 }

@@ -1,21 +1,96 @@
 package main
 
-import "github.com/DATA-DOG/godog"
+import (
+	"fmt"
+	"log"
+	"net"
+	"net/http"
+
+	"github.com/DATA-DOG/godog"
+	"github.com/gorilla/websocket"
+	"github.com/heynemann/deepstream.io-client-go/deepstream"
+)
+
+var activeConnections int
+var client *deepstream.Client
+
+func startServer(port int) (func(), error) {
+	ln, err := net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", port))
+	if err != nil {
+		return nil, err
+	}
+
+	sendToSocketChan := make(chan []byte)
+	activeConnections = 0
+
+	var upgrader = websocket.Upgrader{} // use default options
+	deepstreamHandler := func(w http.ResponseWriter, r *http.Request) {
+		activeConnections++
+		c, err := upgrader.Upgrade(w, r, nil)
+		if err != nil {
+			log.Fatal("upgrade:", err)
+			return
+		}
+		defer c.Close()
+		for {
+			select {
+			case msg := <-sendToSocketChan:
+				c.WriteMessage(websocket.TextMessage, msg)
+			}
+		}
+		activeConnections--
+	}
+
+	serverMux := http.NewServeMux()
+	serverMux.HandleFunc("/deepstream", deepstreamHandler)
+
+	server := http.Server{
+		Handler: serverMux,
+	}
+
+	go func() {
+		server.Serve(ln)
+	}()
+
+	return func() {
+		close(sendToSocketChan)
+		ln.Close()
+	}, nil
+}
+
+var serverCloseFunc func()
 
 func theTestServerIsReady() error {
-	return godog.ErrPending
+	var err error
+	serverCloseFunc, err = startServer(9999)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 func theServerHasActiveConnections(arg1 int) error {
-	return godog.ErrPending
+	if activeConnections != arg1 {
+		return fmt.Errorf("Expected %d active connections to server, but %d are active.", arg1, activeConnections)
+	}
+	return nil
 }
 
 func theClientIsInitialised() error {
-	return godog.ErrPending
+	var err error
+	client, err = deepstream.New("127.0.0.1:9999")
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 func theClientsConnectionStateIs(arg1 string) error {
-	return godog.ErrPending
+	state := client.GetConnectionState()
+	if string(state) != arg1 {
+		return fmt.Errorf("Expected state to be %s but it was %s.", arg1, state)
+	}
+	return nil
 }
 
 func theClientIsInitialisedWithASmallHeartbeatInterval() error {
@@ -787,6 +862,13 @@ func theClientRecievesAnErrorRPCCallbackForWithTheMessage(arg1, arg2 string) err
 }
 
 func FeatureContext(s *godog.Suite) {
+	s.AfterScenario(func(interface{}, error) {
+		if serverCloseFunc != nil {
+			serverCloseFunc()
+			serverCloseFunc = nil
+		}
+	})
+
 	s.Step(`^the test server is ready$`, theTestServerIsReady)
 	s.Step(`^the server has (\d+) active connections$`, theServerHasActiveConnections)
 	s.Step(`^the client is initialised$`, theClientIsInitialised)

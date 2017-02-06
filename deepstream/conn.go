@@ -142,7 +142,7 @@ func (c *Client) handleChallengeAck(msg *Message) error {
 func (c *Client) Login() error {
 	state := c.GetConnectionState()
 	if !c.Options.AutoLogin && (state == interfaces.ConnectionStateChallenging ||
-		state == interfaces.ConnectionStateInitializing) {
+		state == interfaces.ConnectionStateAwaitingConnection) {
 		c.loginRequested = true
 		return nil
 	}
