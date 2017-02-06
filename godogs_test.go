@@ -5,44 +5,45 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"time"
 
 	"github.com/DATA-DOG/godog"
 	"github.com/gorilla/websocket"
 	"github.com/heynemann/deepstream.io-client-go/deepstream"
+	uuid "github.com/satori/go.uuid"
 )
 
-var activeConnections int
 var client *deepstream.Client
+var testServer *TestServer
 
-func startServer(port int) (func(), error) {
-	ln, err := net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", port))
+func afterScenario(interface{}, error) {
+	if testServer != nil {
+		testServer.stop()
+		time.Sleep(10 * time.Millisecond)
+		testServer = nil
+	}
+}
+
+type TestServer struct {
+	Port                 int
+	listener             net.Listener
+	websocketConnections map[string]*websocket.Conn
+	activeConnections    int
+	upgrader             websocket.Upgrader
+	ReceivedMessages     []string
+}
+
+func (ts *TestServer) start() error {
+	ts.websocketConnections = map[string]*websocket.Conn{}
+	ts.upgrader = websocket.Upgrader{} // use default options
+	ln, err := net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", ts.Port))
 	if err != nil {
-		return nil, err
+		return err
 	}
-
-	sendToSocketChan := make(chan []byte)
-	activeConnections = 0
-
-	var upgrader = websocket.Upgrader{} // use default options
-	deepstreamHandler := func(w http.ResponseWriter, r *http.Request) {
-		activeConnections++
-		c, err := upgrader.Upgrade(w, r, nil)
-		if err != nil {
-			log.Fatal("upgrade:", err)
-			return
-		}
-		defer c.Close()
-		for {
-			select {
-			case msg := <-sendToSocketChan:
-				c.WriteMessage(websocket.TextMessage, msg)
-			}
-		}
-		activeConnections--
-	}
+	ts.listener = ln
 
 	serverMux := http.NewServeMux()
-	serverMux.HandleFunc("/deepstream", deepstreamHandler)
+	serverMux.HandleFunc("/deepstream", ts.handler)
 
 	server := http.Server{
 		Handler: serverMux,
@@ -52,17 +53,55 @@ func startServer(port int) (func(), error) {
 		server.Serve(ln)
 	}()
 
-	return func() {
-		close(sendToSocketChan)
-		ln.Close()
-	}, nil
+	return nil
 }
 
-var serverCloseFunc func()
+func (ts *TestServer) stop() {
+	//close(sendToSocketChan)
+	ts.listener.Close()
+}
+
+func (ts *TestServer) handler(w http.ResponseWriter, r *http.Request) {
+	ts.activeConnections++
+	c, err := ts.upgrader.Upgrade(w, r, nil)
+	if err != nil {
+		log.Fatal("upgrade:", err)
+		return
+	}
+	id := uuid.NewV4().String()
+	ts.websocketConnections[id] = c
+
+	for {
+		_, msg, err := c.ReadMessage()
+
+		if websocket.IsCloseError(err) {
+			fmt.Println("Closing!")
+			c.Close()
+			delete(ts.websocketConnections, id)
+			ts.activeConnections--
+			return
+		}
+
+		ts.ReceivedMessages = append(ts.ReceivedMessages, string(msg))
+	}
+}
+
+func startServer(port int) error {
+	ts := &TestServer{
+		Port: port,
+	}
+	err := ts.start()
+	if err != nil {
+		return err
+	}
+
+	testServer = ts
+	return nil
+}
 
 func theTestServerIsReady() error {
 	var err error
-	serverCloseFunc, err = startServer(9999)
+	err = startServer(9999)
 	if err != nil {
 		return err
 	}
@@ -70,6 +109,11 @@ func theTestServerIsReady() error {
 }
 
 func theServerHasActiveConnections(arg1 int) error {
+	if testServer == nil {
+		return fmt.Errorf("Server is not up!")
+	}
+
+	activeConnections := testServer.activeConnections
 	if activeConnections != arg1 {
 		return fmt.Errorf("Expected %d active connections to server, but %d are active.", arg1, activeConnections)
 	}
@@ -137,7 +181,7 @@ func theServerSendsTheMessageCCH() error {
 	return godog.ErrPending
 }
 
-func theLastMessageTheServerRecievedIsCCHRFIRST_SERVER_URL() error {
+func theLastMessageTheServerRecievedIsCCHRFIRSTSERVERURL() error {
 	return godog.ErrPending
 }
 
@@ -149,7 +193,7 @@ func theServerHasReceivedMessages(arg1 int) error {
 	return godog.ErrPending
 }
 
-func theServerSendsTheMessageCREDSECOND_SERVER_URL() error {
+func theServerSendsTheMessageCREDSECONDSERVERURL() error {
 	return godog.ErrPending
 }
 
@@ -169,7 +213,7 @@ func theLastLoginWasSuccessful() error {
 	return godog.ErrPending
 }
 
-func theServerSendsTheMessageAEINVALID_AUTH_DATASinvalidAuthenticationData() error {
+func theServerSendsTheMessageAEINVALIDAUTHDATASinvalidAuthenticationData() error {
 	return godog.ErrPending
 }
 
@@ -177,7 +221,7 @@ func theLastLoginFailedWithErrorMessage(arg1 string) error {
 	return godog.ErrPending
 }
 
-func theServerSendsTheMessageAETOO_MANY_AUTH_ATTEMPTSStooManyAuthenticationAttempts() error {
+func theServerSendsTheMessageAETOOMANYAUTHATTEMPTSStooManyAuthenticationAttempts() error {
 	return godog.ErrPending
 }
 
@@ -385,7 +429,7 @@ func theClientSetsTheRecordKeyTo(arg1, arg2 string) error {
 	return godog.ErrPending
 }
 
-func theServerSendsTheMessageREVERSION_EXISTSmergeRecordValue(arg1 int, arg2 string, arg3 int) error {
+func theServerSendsTheMessageREVERSIONEXISTSmergeRecordValue(arg1 int, arg2 string, arg3 int) error {
 	return godog.ErrPending
 }
 
@@ -517,7 +561,7 @@ func theClientHasNoResponseForTheSnapshotOfRecord(arg1 string) error {
 	return godog.ErrPending
 }
 
-func theServerSendsTheMessageRESNsnapshotRecordRECORD_NOT_FOUND() error {
+func theServerSendsTheMessageRESNsnapshotRecordRECORDNOTFOUND() error {
 	return godog.ErrPending
 }
 
@@ -613,11 +657,11 @@ func theLastMessageTheServerRecievedIsRUunhappyRecord(arg1 int, arg2, arg3 strin
 	return godog.ErrPending
 }
 
-func theServerSendsTheMessageRECACHE_RETRIEVAL_TIMEOUTunhappyRecord() error {
+func theServerSendsTheMessageRECACHERETRIEVALTIMEOUTunhappyRecord() error {
 	return godog.ErrPending
 }
 
-func theServerSendsTheMessageRESTORAGE_RETRIEVAL_TIMEOUTunhappyRecord() error {
+func theServerSendsTheMessageRESTORAGERETRIEVALTIMEOUTunhappyRecord() error {
 	return godog.ErrPending
 }
 
@@ -713,7 +757,7 @@ func theLastMessageTheServerRecievedIsRPhappyRecordValidDataSsomeDataTrue(arg1 i
 	return godog.ErrPending
 }
 
-func theServerSendsTheMessageREVERSION_EXISTShappyRecordNewErrorDataTrue(arg1 int, arg2, arg3 string) error {
+func theServerSendsTheMessageREVERSIONEXISTShappyRecordNewErrorDataTrue(arg1 int, arg2, arg3 string) error {
 	return godog.ErrPending
 }
 
@@ -862,12 +906,7 @@ func theClientRecievesAnErrorRPCCallbackForWithTheMessage(arg1, arg2 string) err
 }
 
 func FeatureContext(s *godog.Suite) {
-	s.AfterScenario(func(interface{}, error) {
-		if serverCloseFunc != nil {
-			serverCloseFunc()
-			serverCloseFunc = nil
-		}
-	})
+	s.AfterScenario(afterScenario)
 
 	s.Step(`^the test server is ready$`, theTestServerIsReady)
 	s.Step(`^the server has (\d+) active connections$`, theServerHasActiveConnections)
@@ -884,17 +923,17 @@ func FeatureContext(s *godog.Suite) {
 	s.Step(`^the second test server is ready$`, theSecondTestServerIsReady)
 	s.Step(`^the second server has (\d+) active connections$`, theSecondServerHasActiveConnections)
 	s.Step(`^the server sends the message C\|CH\+$`, theServerSendsTheMessageCCH)
-	s.Step(`^the last message the server recieved is C\|CHR\|<FIRST_SERVER_URL>\+$`, theLastMessageTheServerRecievedIsCCHRFIRST_SERVER_URL)
+	s.Step(`^the last message the server recieved is C\|CHR\|<FIRST_SERVER_URL>\+$`, theLastMessageTheServerRecievedIsCCHRFIRSTSERVERURL)
 	s.Step(`^the server sends the message C\|REJ\+$`, theServerSendsTheMessageCREJ)
 	s.Step(`^the server has received (\d+) messages$`, theServerHasReceivedMessages)
-	s.Step(`^the server sends the message C\|RED\|<SECOND_SERVER_URL>\+$`, theServerSendsTheMessageCREDSECOND_SERVER_URL)
+	s.Step(`^the server sends the message C\|RED\|<SECOND_SERVER_URL>\+$`, theServerSendsTheMessageCREDSECONDSERVERURL)
 	s.Step(`^some time passes$`, someTimePasses)
 	s.Step(`^the client is on the second server$`, theClientIsOnTheSecondServer)
 	s.Step(`^the last message the server recieved is A\|REQ\|{"([^"]*)":"XXX","([^"]*)":"YYY"}\+$`, theLastMessageTheServerRecievedIsAREQXXXYYY)
 	s.Step(`^the last login was successful$`, theLastLoginWasSuccessful)
-	s.Step(`^the server sends the message A\|E\|INVALID_AUTH_DATA\|Sinvalid authentication data\+$`, theServerSendsTheMessageAEINVALID_AUTH_DATASinvalidAuthenticationData)
+	s.Step(`^the server sends the message A\|E\|INVALID_AUTH_DATA\|Sinvalid authentication data\+$`, theServerSendsTheMessageAEINVALIDAUTHDATASinvalidAuthenticationData)
 	s.Step(`^the last login failed with error message "([^"]*)"$`, theLastLoginFailedWithErrorMessage)
-	s.Step(`^the server sends the message A\|E\|TOO_MANY_AUTH_ATTEMPTS\|Stoo many authentication attempts\+$`, theServerSendsTheMessageAETOO_MANY_AUTH_ATTEMPTSStooManyAuthenticationAttempts)
+	s.Step(`^the server sends the message A\|E\|TOO_MANY_AUTH_ATTEMPTS\|Stoo many authentication attempts\+$`, theServerSendsTheMessageAETOOMANYAUTHATTEMPTSStooManyAuthenticationAttempts)
 	s.Step(`^the server resets its message count$`, theServerResetsItsMessageCount)
 	s.Step(`^the client subscribes to an event named "([^"]*)"$`, theClientSubscribesToAnEventNamed)
 	s.Step(`^the server sends the message E\|A\|S\|test(\d+)\+$`, theServerSendsTheMessageEAStest)
@@ -946,7 +985,7 @@ func FeatureContext(s *godog.Suite) {
 	s.Step(`^the server sends the message R\|A\|S\|mergeRecord\+$`, theServerSendsTheMessageRASmergeRecord)
 	s.Step(`^the server sends the message R\|R\|mergeRecord\|(\d+)\|{"([^"]*)":"value(\d+)"}\+$`, theServerSendsTheMessageRRmergeRecordValue)
 	s.Step(`^the client sets the record "([^"]*)" "key" to "([^"]*)"$`, theClientSetsTheRecordKeyTo)
-	s.Step(`^the server sends the message R\|E\|VERSION_EXISTS\|mergeRecord\|(\d+)\|{"([^"]*)":"value(\d+)"}\+$`, theServerSendsTheMessageREVERSION_EXISTSmergeRecordValue)
+	s.Step(`^the server sends the message R\|E\|VERSION_EXISTS\|mergeRecord\|(\d+)\|{"([^"]*)":"value(\d+)"}\+$`, theServerSendsTheMessageREVERSIONEXISTSmergeRecordValue)
 	s.Step(`^the last message the server recieved is R\|U\|mergeRecord\|(\d+)\|{"([^"]*)":"value(\d+)"}\+$`, theLastMessageTheServerRecievedIsRUmergeRecordValue)
 	s.Step(`^the server sends the message R\|U\|mergeRecord\|(\d+)\|{"([^"]*)":"value(\d+)"}\+$`, theServerSendsTheMessageRUmergeRecordValue)
 	s.Step(`^the last message the server recieved is R\|CR\|connectionRecord\+$`, theLastMessageTheServerRecievedIsRCRconnectionRecord)
@@ -979,7 +1018,7 @@ func FeatureContext(s *godog.Suite) {
 	s.Step(`^the server sends the message R\|A\|S\|snapshotRecord\+$`, theServerSendsTheMessageRASsnapshotRecord)
 	s.Step(`^the client requests a snapshot for the record "([^"]*)"$`, theClientRequestsASnapshotForTheRecord)
 	s.Step(`^the client has no response for the snapshot of record "([^"]*)"$`, theClientHasNoResponseForTheSnapshotOfRecord)
-	s.Step(`^the server sends the message R\|E\|SN\|snapshotRecord\|RECORD_NOT_FOUND\+$`, theServerSendsTheMessageRESNsnapshotRecordRECORD_NOT_FOUND)
+	s.Step(`^the server sends the message R\|E\|SN\|snapshotRecord\|RECORD_NOT_FOUND\+$`, theServerSendsTheMessageRESNsnapshotRecordRECORDNOTFOUND)
 	s.Step(`^the client is told the record "([^"]*)" encountered an error retrieving snapshot$`, theClientIsToldTheRecordEncounteredAnErrorRetrievingSnapshot)
 	s.Step(`^the server sends the message R\|R\|snapshotRecord\|(\d+)\|{"([^"]*)":"John"}\+$`, theServerSendsTheMessageRRsnapshotRecordJohn)
 	s.Step(`^the client is provided the snapshot for record "([^"]*)" with data "{"([^"]*)":"John"}"$`, theClientIsProvidedTheSnapshotForRecordWithDataJohn)
@@ -1003,8 +1042,8 @@ func FeatureContext(s *godog.Suite) {
 	s.Step(`^the server sends the message R\|R\|unhappyRecord\|(\d+)\|{"([^"]*)":\["([^"]*)"\]}\+$`, theServerSendsTheMessageRRunhappyRecord)
 	s.Step(`^the client sets the record "([^"]*)" to {"([^"]*)":\["([^"]*)"\]}$`, theClientSetsTheRecordTo)
 	s.Step(`^the last message the server recieved is R\|U\|unhappyRecord\|(\d+)\|{"([^"]*)":\["([^"]*)"\]}\+$`, theLastMessageTheServerRecievedIsRUunhappyRecord)
-	s.Step(`^the server sends the message R\|E\|CACHE_RETRIEVAL_TIMEOUT\|unhappyRecord\+$`, theServerSendsTheMessageRECACHE_RETRIEVAL_TIMEOUTunhappyRecord)
-	s.Step(`^the server sends the message R\|E\|STORAGE_RETRIEVAL_TIMEOUT\|unhappyRecord\+$`, theServerSendsTheMessageRESTORAGE_RETRIEVAL_TIMEOUTunhappyRecord)
+	s.Step(`^the server sends the message R\|E\|CACHE_RETRIEVAL_TIMEOUT\|unhappyRecord\+$`, theServerSendsTheMessageRECACHERETRIEVALTIMEOUTunhappyRecord)
+	s.Step(`^the server sends the message R\|E\|STORAGE_RETRIEVAL_TIMEOUT\|unhappyRecord\+$`, theServerSendsTheMessageRESTORAGERETRIEVALTIMEOUTunhappyRecord)
 	s.Step(`^the client discards the record named "([^"]*)"$`, theClientDiscardsTheRecordNamed)
 	s.Step(`^the last message the server recieved is R\|US\|unhappyRecord\+$`, theLastMessageTheServerRecievedIsRUSunhappyRecord)
 	s.Step(`^the client deletes the record named "([^"]*)"$`, theClientDeletesTheRecordNamed)
@@ -1028,7 +1067,7 @@ func FeatureContext(s *godog.Suite) {
 	s.Step(`^the last message the server recieved is R\|P\|happyRecord\|(\d+)\|validData\|SdifferentData\|{"([^"]*)":true}\+$`, theLastMessageTheServerRecievedIsRPhappyRecordValidDataSdifferentDataTrue)
 	s.Step(`^the server sends the message R\|WA\|happyRecord\|\[(\d+)\]\|SError writing record to cache\+$`, theServerSendsTheMessageRWAhappyRecordSErrorWritingRecordToCache)
 	s.Step(`^the last message the server recieved is R\|P\|happyRecord\|(\d+)\|validData\|SsomeData\|{"([^"]*)":true}\+$`, theLastMessageTheServerRecievedIsRPhappyRecordValidDataSsomeDataTrue)
-	s.Step(`^the server sends the message R\|E\|VERSION_EXISTS\|happyRecord\|(\d+)\|{"([^"]*)":"newErrorData"}\|{"([^"]*)":true}\+$`, theServerSendsTheMessageREVERSION_EXISTShappyRecordNewErrorDataTrue)
+	s.Step(`^the server sends the message R\|E\|VERSION_EXISTS\|happyRecord\|(\d+)\|{"([^"]*)":"newErrorData"}\|{"([^"]*)":true}\+$`, theServerSendsTheMessageREVERSIONEXISTShappyRecordNewErrorDataTrue)
 	s.Step(`^the server sends the message R\|P\|happyRecord\|(\d+)\|pets\.(\d+)\.age\|N(\d+)\+$`, theServerSendsTheMessageRPhappyRecordPetsAgeN)
 	s.Step(`^the server sends the message R\|U\|happyRecord\|(\d+)\|{"([^"]*)":"Smith", "([^"]*)": \[{"([^"]*)":"Ruffus", "([^"]*)":"dog","([^"]*)":(\d+)}\]}\+$`, theServerSendsTheMessageRUhappyRecordSmithRuffusDog)
 	s.Step(`^the client record "([^"]*)" data is {"([^"]*)":"Smith", "([^"]*)": \[{"([^"]*)":"Ruffus", "([^"]*)":"dog","([^"]*)":(\d+)}\]}$`, theClientRecordDataIsSmithRuffusDog)
