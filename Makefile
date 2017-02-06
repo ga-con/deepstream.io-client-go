@@ -6,7 +6,7 @@ setup:
 	@go get github.com/onsi/ginkgo/ginkgo
 	@glide install
 
-test: unit deps int# acceptance
+test: unit deps int acceptance
 
 unit:
 	@env MY_IP=${MY_IP} ginkgo -r --randomizeAllSpecs --randomizeSuites --cover --focus="\[Unit\].*" .
@@ -35,8 +35,8 @@ cov: test-coverage-run
 cov-html: test-coverage-run
 	@go tool cover -html=_build/test-coverage-all.out
 
-acceptance:
-	@godog
+acceptance acc:
+	@godog features/connecting
 
 dependencies deps:
 	@docker-compose -p deepstream-golang up --remove-orphans -d
