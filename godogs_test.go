@@ -15,7 +15,6 @@ import (
 	uuid "github.com/satori/go.uuid"
 )
 
-const TimeMultiplier = 0.01
 const defaultPort = 9999
 
 var receivedErrors []error
@@ -169,6 +168,7 @@ func theClientIsInitialised() error {
 	var err error
 	opts := deepstream.DefaultOptions()
 	opts.AutoLogin = false
+	opts.HeartbeatIntervalMs = 100000
 	opts.ErrorHandler = handleClientErrors
 	url := fmt.Sprintf("127.0.0.1:%d", defaultPort)
 	client, err = deepstream.New(url, opts)
@@ -182,7 +182,7 @@ func theClientIsInitialisedWithASmallHeartbeatInterval() error {
 	var err error
 	opts := deepstream.DefaultOptions()
 	opts.AutoLogin = false
-	opts.HeartbeatIntervalMs = 20
+	opts.HeartbeatIntervalMs = 300
 	opts.ErrorHandler = handleClientErrors
 	url := fmt.Sprintf("127.0.0.1:%d", defaultPort)
 	client, err = deepstream.New(url, opts)
@@ -211,7 +211,9 @@ func theServerSendsTheMessage(topic, action string, data ...string) func() error
 		}
 
 		var err error
-		for _, ts := range testServers {
+		fmt.Println(testServers, receivedErrors)
+		for port, ts := range testServers {
+			fmt.Println("sending through port", port, topic, action)
 			err = ts.sendMessage(
 				fmt.Sprintf(
 					"%s%s%s%s%s", topic, interfaces.MessagePartSeparator,
@@ -219,6 +221,8 @@ func theServerSendsTheMessage(topic, action string, data ...string) func() error
 				),
 			)
 		}
+
+		time.Sleep(20 * time.Millisecond)
 
 		return err
 	}
@@ -237,7 +241,7 @@ func theClientLogsInWithUsernameAndPassword(username, password string) error {
 		return err
 	}
 
-	time.Sleep(30 * time.Millisecond)
+	time.Sleep(20 * time.Millisecond)
 	return nil
 }
 
@@ -258,14 +262,15 @@ func theServerReceivedTheMessage(port int, topic, action string, data ...string)
 			"%s%s%s%s%s", topic, interfaces.MessagePartSeparator,
 			action, dataMsg, interfaces.MessageSeparator,
 		)
+		fmt.Println(expectedMessage)
+		fmt.Println(ts.ReceivedMessages)
 		return ts.hasMessage(expectedMessage)
 	}
 }
 
 func someMsLater(ms int) func() error {
 	return func() error {
-		duration := int(float64(ms) * TimeMultiplier)
-		time.Sleep(time.Duration(duration) * time.Millisecond)
+		time.Sleep(time.Duration(ms) * time.Millisecond)
 		return nil
 	}
 }
@@ -1032,7 +1037,7 @@ func FeatureContext(s *godog.Suite) {
 	s.Step(`^the server sends the message A\|A\+$`, theServerSendsTheMessage("A", "A"))
 	s.Step(`^the server sends the message C\|PI\+$`, theServerSendsTheMessage("C", "PI"))
 	s.Step(`^the server received the message C\|PO\+$`, theServerReceivedTheMessage(defaultPort, "C", "PO"))
-	s.Step(`^two seconds later$`, someMsLater(2000))
+	s.Step(`^two seconds later$`, someMsLater(800))
 	s.Step(`^the client throws a "([^"]*)" error with message "([^"]*)"$`, theClientThrowsAnErrorWithMessage)
 	s.Step(`^the second test server is ready$`, theSecondTestServerIsReady)
 	s.Step(`^the second server has (\d+) active connections$`, theSecondServerHasActiveConnections)
@@ -1041,7 +1046,7 @@ func FeatureContext(s *godog.Suite) {
 	s.Step(`^the server sends the message C\|REJ\+$`, theServerSendsTheMessageCREJ)
 	s.Step(`^the server has received (\d+) messages$`, theServerHasReceivedMessages)
 	s.Step(`^the server sends the message C\|RED\|<SECOND_SERVER_URL>\+$`, theServerSendsTheMessage("C", "RED", "127.0.0.1:9998"))
-	s.Step(`^some time passes$`, someMsLater(2000))
+	s.Step(`^some time passes$`, someMsLater(100))
 	s.Step(`^the client is on the second server$`, theClientIsOnTheSecondServer)
 	s.Step(`^the last message the server recieved is A\|REQ\|{"([^"]*)":"XXX","([^"]*)":"YYY"}\+$`, theServerReceivedTheMessage(9998, "A", "REQ", `{"username":"XXX","password":"YYY"}`))
 	s.Step(`^the last login was successful$`, theLastLoginWasSuccessful)

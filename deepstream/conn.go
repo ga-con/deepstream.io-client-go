@@ -118,7 +118,7 @@ func (c *Client) GetConnectionState() interfaces.ConnectionState {
 }
 
 func (c *Client) onMessage(msg *Message) {
-	//fmt.Println(msg)
+	fmt.Println(msg)
 	var err error
 	switch {
 	case msg.Topic == "C":
@@ -168,6 +168,7 @@ func (c *Client) handleChallengeAck(msg *Message) error {
 }
 
 func (c *Client) handlePing(msg *Message) error {
+	fmt.Println("received ping")
 	pong := &PongAction{}
 	return c.Connector.WriteMessage([]byte(pong.ToAction()))
 }
