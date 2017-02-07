@@ -15,10 +15,11 @@ import (
 )
 
 const TimeMultiplier = 0.01
+const defaultPort = 9999
 
 var receivedErrors []error
 var client *deepstream.Client
-var testServer *TestServer
+var testServers = map[int]*TestServer{}
 
 func afterScenario(interface{}, error) {
 	receivedErrors = []error{}
@@ -27,11 +28,12 @@ func afterScenario(interface{}, error) {
 		client = nil
 	}
 
-	if testServer != nil {
+	for _, testServer := range testServers {
 		testServer.stop()
 		time.Sleep(10 * time.Millisecond)
 		testServer = nil
 	}
+	testServers = map[int]*TestServer{}
 }
 
 type TestServer struct {
@@ -123,6 +125,10 @@ func (ts *TestServer) hasMessage(expectedMessage string) error {
 }
 
 func startServer(port int) error {
+	if _, ok := testServers[port]; ok {
+		return nil
+	}
+
 	ts := &TestServer{
 		Port: port,
 	}
@@ -131,13 +137,13 @@ func startServer(port int) error {
 		return err
 	}
 
-	testServer = ts
+	testServers[port] = ts
 	return nil
 }
 
 func theTestServerIsReady() error {
 	var err error
-	err = startServer(9999)
+	err = startServer(defaultPort)
 	if err != nil {
 		return err
 	}
@@ -145,11 +151,7 @@ func theTestServerIsReady() error {
 }
 
 func theServerHasActiveConnections(expectedConnections int) error {
-	if testServer == nil {
-		return fmt.Errorf("Server is not up!")
-	}
-
-	activeConnections := testServer.activeConnections
+	activeConnections := testServers[defaultPort].activeConnections
 	if activeConnections != expectedConnections {
 		return fmt.Errorf("Expected %d active connections to server, but %d are active.", expectedConnections, activeConnections)
 	}
@@ -164,7 +166,8 @@ func theClientIsInitialised() error {
 	var err error
 	opts := deepstream.DefaultOptions()
 	opts.ErrorHandler = handleClientErrors
-	client, err = deepstream.New("127.0.0.1:9999", opts)
+	url := fmt.Sprintf("127.0.0.1:%d", defaultPort)
+	client, err = deepstream.New(url, opts)
 	if err != nil {
 		return err
 	}
@@ -177,7 +180,8 @@ func theClientIsInitialisedWithASmallHeartbeatInterval() error {
 	opts.AutoLogin = false
 	opts.HeartbeatIntervalMs = 20
 	opts.ErrorHandler = handleClientErrors
-	client, err = deepstream.New("127.0.0.1:9999", opts)
+	url := fmt.Sprintf("127.0.0.1:%d", defaultPort)
+	client, err = deepstream.New(url, opts)
 	if err != nil {
 		return err
 	}
@@ -194,7 +198,7 @@ func theClientsConnectionStateIs(arg1 string) error {
 
 func theServerSendsTheMessage(topic, action string) func() error {
 	return func() error {
-		return testServer.sendMessage(
+		return testServers[defaultPort].sendMessage(
 			fmt.Sprintf("%s%s%s%s", topic, interfaces.MessagePartSeparator, action, interfaces.MessageSeparator),
 		)
 	}
@@ -219,7 +223,7 @@ func theServerReceivedTheMessage(topic, action string) func() error {
 			action, interfaces.MessageSeparator,
 		)
 
-		return testServer.hasMessage(expectedMessage)
+		return testServers[defaultPort].hasMessage(expectedMessage)
 	}
 }
 

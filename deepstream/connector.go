@@ -123,9 +123,12 @@ func (c *Connector) WriteMessage(msg []byte, msgTypeOrNil ...int) error {
 
 //Close the connection to deepstream
 func (c *Connector) Close() error {
-	err := c.Client.Close()
-	if err != nil {
-		return err
+	if c.Client != nil {
+		err := c.Client.Close()
+		if err != nil {
+			return err
+		}
+		c.Client = nil
 	}
 	c.ConnectionState = interfaces.ConnectionStateClosed
 	return nil
