@@ -102,23 +102,15 @@ func (c *Client) startMonitoringHeartbeat() {
 	go func() {
 		for {
 			if time.Now().Sub(c.lastHeartbeat) > tolerance {
+				c.Close()
 				//TODO: Change this to a typed error
 				c.Error(fmt.Errorf("Two connections heartbeats missed successively"))
-				c.Close()
 				return
 			}
 			time.Sleep(time.Duration(c.Options.HeartbeatIntervalMs) * time.Millisecond)
 		}
 	}()
 }
-
-//var heartBeatTolerance = this._options.heartbeatInterval * 2;
-
-//if( Date.now() - this._lastHeartBeat > heartBeatTolerance ) {
-//clearInterval( this._heartbeatInterval );
-//this._endpoint.close();
-//this._onError( 'Two connections heartbeats missed successively' );
-//}
 
 //GetConnectionState returns the connection state for the connector
 func (c *Client) GetConnectionState() interfaces.ConnectionState {
