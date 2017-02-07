@@ -2,149 +2,38 @@ package main
 
 import (
 	"fmt"
-	"log"
-	"net"
-	"net/http"
 	"strings"
 	"time"
 
 	"github.com/DATA-DOG/godog"
-	"github.com/gorilla/websocket"
 	"github.com/heynemann/deepstream.io-client-go/deepstream"
 	"github.com/heynemann/deepstream.io-client-go/interfaces"
-	uuid "github.com/satori/go.uuid"
 )
+
+var client *deepstream.Client
+var receivedErrors []error
 
 const defaultPort = 9999
 
-var receivedErrors []error
-var client *deepstream.Client
-var testServers = map[int]*TestServer{}
-
 func afterScenario(interface{}, error) {
 	receivedErrors = []error{}
+
 	if client != nil {
 		client.Close()
 		client = nil
 	}
 
-	for _, testServer := range testServers {
-		testServer.stop()
+	for _, testServer := range deepstream.TestServers {
+		testServer.Stop()
 		time.Sleep(10 * time.Millisecond)
 		testServer = nil
 	}
-	testServers = map[int]*TestServer{}
-}
-
-type TestServer struct {
-	Port                 int
-	listener             net.Listener
-	websocketConnections map[string]*websocket.Conn
-	activeConnections    int
-	upgrader             websocket.Upgrader
-	ReceivedMessages     []string
-}
-
-func (ts *TestServer) start() error {
-	ts.websocketConnections = map[string]*websocket.Conn{}
-	ts.upgrader = websocket.Upgrader{} // use default options
-	ln, err := net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", ts.Port))
-	if err != nil {
-		return err
-	}
-	ts.listener = ln
-
-	serverMux := http.NewServeMux()
-	serverMux.HandleFunc("/deepstream", ts.handler)
-
-	server := http.Server{
-		Handler: serverMux,
-	}
-
-	go func() {
-		server.Serve(ln)
-	}()
-
-	return nil
-}
-
-func (ts *TestServer) stop() {
-	//close(sendToSocketChan)
-	ts.listener.Close()
-}
-
-func (ts *TestServer) handler(w http.ResponseWriter, r *http.Request) {
-	ts.activeConnections++
-	c, err := ts.upgrader.Upgrade(w, r, nil)
-	if err != nil {
-		log.Fatal("upgrade:", err)
-		return
-	}
-	id := uuid.NewV4().String()
-	ts.websocketConnections[id] = c
-
-	for {
-		_, msg, err := c.ReadMessage()
-
-		if websocket.IsCloseError(err) {
-			c.Close()
-			delete(ts.websocketConnections, id)
-			ts.activeConnections--
-			return
-		}
-		if err != nil {
-			delete(ts.websocketConnections, id)
-			ts.activeConnections--
-			return
-		}
-
-		ts.ReceivedMessages = append(ts.ReceivedMessages, string(msg))
-	}
-}
-
-func (ts *TestServer) sendMessage(message string) error {
-	var err error
-	for _, conn := range ts.websocketConnections {
-		err = conn.WriteMessage(websocket.TextMessage, []byte(message))
-	}
-	if err != nil {
-		return err
-	}
-	time.Sleep(10 * time.Millisecond)
-	return nil
-}
-
-func (ts *TestServer) hasMessage(expectedMessage string) error {
-	for _, msg := range ts.ReceivedMessages {
-		if msg == expectedMessage {
-			return nil
-		}
-	}
-
-	return fmt.Errorf("Message '%s' was not received by the server.", expectedMessage)
-}
-
-func startServer(port int) error {
-	if _, ok := testServers[port]; ok {
-		return nil
-	}
-
-	ts := &TestServer{
-		Port:             port,
-		ReceivedMessages: []string{},
-	}
-	err := ts.start()
-	if err != nil {
-		return err
-	}
-
-	testServers[port] = ts
-	return nil
+	deepstream.ResetTestServers()
 }
 
 func theTestServerIsReady() error {
 	var err error
-	err = startServer(defaultPort)
+	err = deepstream.StartTestServer(defaultPort)
 	if err != nil {
 		return err
 	}
@@ -153,7 +42,7 @@ func theTestServerIsReady() error {
 }
 
 func theServerHasActiveConnections(expectedConnections int) error {
-	activeConnections := testServers[defaultPort].activeConnections
+	activeConnections := deepstream.TestServers[defaultPort].ActiveConnections
 	if activeConnections != expectedConnections {
 		return fmt.Errorf("Expected %d active connections to server, but %d are active.", expectedConnections, activeConnections)
 	}
@@ -166,15 +55,15 @@ func handleClientErrors(err error) {
 
 func theClientIsInitialised() error {
 	var err error
-	if _, ok := testServers[defaultPort]; !ok {
-		err = startServer(defaultPort)
+	if _, ok := deepstream.TestServers[defaultPort]; !ok {
+		err = deepstream.StartTestServer(defaultPort)
 		if err != nil {
 			return err
 		}
 	}
 	opts := deepstream.DefaultOptions()
 	opts.AutoLogin = false
-	opts.HeartbeatIntervalMs = 100000
+	opts.HeartbeatIntervalMs = 100000000
 	opts.ErrorHandler = handleClientErrors
 	url := fmt.Sprintf("127.0.0.1:%d", defaultPort)
 	client, err = deepstream.New(url, opts)
@@ -217,8 +106,8 @@ func theServerSendsTheMessage(topic, action string, data ...string) func() error
 		}
 
 		var err error
-		for _, ts := range testServers {
-			err = ts.sendMessage(
+		for _, ts := range deepstream.TestServers {
+			err = ts.SendMessage(
 				fmt.Sprintf(
 					"%s%s%s%s%s", topic, interfaces.MessagePartSeparator,
 					action, dataMsg, interfaces.MessageSeparator,
@@ -263,8 +152,8 @@ func theServerReceivedTheMessage(topic, action string, data ...string) func() er
 			"%s%s%s%s%s", topic, interfaces.MessagePartSeparator,
 			action, dataMsg, interfaces.MessageSeparator,
 		)
-		for _, ts := range testServers {
-			err = ts.hasMessage(expectedMessage)
+		for _, ts := range deepstream.TestServers {
+			err = ts.HasMessage(expectedMessage)
 			if err == nil {
 				return nil
 			}
@@ -300,7 +189,7 @@ func theClientThrowsAnErrorMessage(expectedMessage string) error {
 
 func theSecondTestServerIsReady() error {
 	var err error
-	err = startServer(9998)
+	err = deepstream.StartTestServer(9998)
 	if err != nil {
 		return err
 	}
@@ -309,7 +198,7 @@ func theSecondTestServerIsReady() error {
 }
 
 func theSecondServerHasActiveConnections(expectedConnections int) error {
-	activeConnections := testServers[9998].activeConnections
+	activeConnections := deepstream.TestServers[9998].ActiveConnections
 	if activeConnections != expectedConnections {
 		return fmt.Errorf("Expected %d active connections to server, but %d are active.", expectedConnections, activeConnections)
 	}
@@ -317,7 +206,7 @@ func theSecondServerHasActiveConnections(expectedConnections int) error {
 }
 
 func theServerHasReceivedMessages(numberOfMessages int) error {
-	recMessages := len(testServers[defaultPort].ReceivedMessages)
+	recMessages := len(deepstream.TestServers[defaultPort].ReceivedMessages)
 	if recMessages != numberOfMessages {
 		return fmt.Errorf(
 			"Expected server to have received %d messages, but there were %d messages.",
