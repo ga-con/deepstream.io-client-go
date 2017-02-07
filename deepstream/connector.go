@@ -61,6 +61,10 @@ func (c *Connector) Connect() error {
 
 	go func() {
 		for {
+			if c.Client == nil {
+				return
+			}
+
 			messageType, msgBytes, err := c.Client.ReadMessage()
 			if websocket.IsCloseError(err) {
 				c.Close()

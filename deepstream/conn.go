@@ -118,7 +118,7 @@ func (c *Client) GetConnectionState() interfaces.ConnectionState {
 }
 
 func (c *Client) onMessage(msg *Message) {
-	fmt.Println(msg)
+	//fmt.Println(msg)
 	var err error
 	switch {
 	case msg.Topic == "C":
@@ -146,6 +146,8 @@ func (c *Client) handleConnectionMessages(msg *Message) error {
 		return c.handlePing(msg)
 	case msg.Action == "RED":
 		return c.handleRedirect(msg)
+	case msg.Action == "REJ":
+		return c.handleConnectionRejected(msg)
 	default:
 		fmt.Println("Message not understood!")
 	}
@@ -168,7 +170,6 @@ func (c *Client) handleChallengeAck(msg *Message) error {
 }
 
 func (c *Client) handlePing(msg *Message) error {
-	fmt.Println("received ping")
 	pong := &PongAction{}
 	return c.Connector.WriteMessage([]byte(pong.ToAction()))
 }
@@ -187,9 +188,22 @@ func (c *Client) handleRedirect(msg *Message) error {
 	return nil
 }
 
+func (c *Client) handleConnectionRejected(msg *Message) error {
+	err := c.Close()
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 //Login to deepstream - if connection is still being started, it will login as soon as possible
 func (c *Client) Login() error {
 	state := c.GetConnectionState()
+
+	if state == interfaces.ConnectionStateClosed {
+		// Do not error twice
+		return c.Error(fmt.Errorf("this client's connection was closed"))
+	}
 
 	if !c.Options.AutoLogin && state != interfaces.ConnectionStateAwaitingConnection {
 		c.loginRequested = true
@@ -220,10 +234,7 @@ func (c *Client) handleAuthenticationMessages(msg *Message) error {
 			return c.handleAuthenticationAck(msg)
 		}
 	case msg.Action == "E":
-		return fmt.Errorf(
-			"Could not connect to deepstream.io server with the provided credentials (user: %s).",
-			c.AuthParams["username"],
-		)
+		return c.handleAuthenticationError(msg)
 	default:
 		fmt.Println("Message not understood!")
 	}
@@ -234,6 +245,25 @@ func (c *Client) handleAuthenticationMessages(msg *Message) error {
 func (c *Client) handleAuthenticationAck(msg *Message) error {
 	c.Connector.ConnectionState = interfaces.ConnectionStateOpen
 	return nil
+}
+
+func (c *Client) handleAuthenticationError(msg *Message) error {
+	err := msg.Data[0]
+	switch err {
+	case interfaces.EventInvalidAuthData:
+		return fmt.Errorf(
+			"invalid authentication data",
+		)
+	case interfaces.EventTooManyAuthAttempts:
+		return fmt.Errorf(
+			"too many authentication attempts",
+		)
+	default:
+		return fmt.Errorf(
+			"error authenticating to deepstream",
+		)
+
+	}
 }
 
 func (c *Client) handleEventMessages(msg *Message) error {

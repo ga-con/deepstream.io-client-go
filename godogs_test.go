@@ -166,6 +166,12 @@ func handleClientErrors(err error) {
 
 func theClientIsInitialised() error {
 	var err error
+	if _, ok := testServers[defaultPort]; !ok {
+		err = startServer(defaultPort)
+		if err != nil {
+			return err
+		}
+	}
 	opts := deepstream.DefaultOptions()
 	opts.AutoLogin = false
 	opts.HeartbeatIntervalMs = 100000
@@ -211,9 +217,7 @@ func theServerSendsTheMessage(topic, action string, data ...string) func() error
 		}
 
 		var err error
-		fmt.Println(testServers, receivedErrors)
-		for port, ts := range testServers {
-			fmt.Println("sending through port", port, topic, action)
+		for _, ts := range testServers {
 			err = ts.sendMessage(
 				fmt.Sprintf(
 					"%s%s%s%s%s", topic, interfaces.MessagePartSeparator,
@@ -236,18 +240,14 @@ func theClientLogsInWithUsernameAndPassword(username, password string) error {
 		"password": password,
 	}
 
-	err := client.Login()
-	if err != nil {
-		return err
-	}
+	client.Login()
 
 	time.Sleep(20 * time.Millisecond)
 	return nil
 }
 
-func theServerReceivedTheMessage(port int, topic, action string, data ...string) func() error {
+func theServerReceivedTheMessage(topic, action string, data ...string) func() error {
 	return func() error {
-		ts := testServers[port]
 		dataMsg := ""
 
 		if len(data) > 0 {
@@ -258,13 +258,18 @@ func theServerReceivedTheMessage(port int, topic, action string, data ...string)
 			)
 		}
 
+		var err error
 		expectedMessage := fmt.Sprintf(
 			"%s%s%s%s%s", topic, interfaces.MessagePartSeparator,
 			action, dataMsg, interfaces.MessageSeparator,
 		)
-		fmt.Println(expectedMessage)
-		fmt.Println(ts.ReceivedMessages)
-		return ts.hasMessage(expectedMessage)
+		for _, ts := range testServers {
+			err = ts.hasMessage(expectedMessage)
+			if err == nil {
+				return nil
+			}
+		}
+		return err
 	}
 }
 
@@ -276,6 +281,15 @@ func someMsLater(ms int) func() error {
 }
 
 func theClientThrowsAnErrorWithMessage(expectedError, expectedMessage string) error {
+	for _, err := range receivedErrors {
+		if err.Error() == expectedMessage {
+			return nil
+		}
+	}
+	return fmt.Errorf("The error with message '%s' did not happen.", expectedMessage)
+}
+
+func theClientThrowsAnErrorMessage(expectedMessage string) error {
 	for _, err := range receivedErrors {
 		if err.Error() == expectedMessage {
 			return nil
@@ -302,12 +316,16 @@ func theSecondServerHasActiveConnections(expectedConnections int) error {
 	return nil
 }
 
-func theServerSendsTheMessageCREJ() error {
-	return godog.ErrPending
-}
-
-func theServerHasReceivedMessages(arg1 int) error {
-	return godog.ErrPending
+func theServerHasReceivedMessages(numberOfMessages int) error {
+	recMessages := len(testServers[defaultPort].ReceivedMessages)
+	if recMessages != numberOfMessages {
+		return fmt.Errorf(
+			"Expected server to have received %d messages, but there were %d messages.",
+			numberOfMessages,
+			recMessages,
+		)
+	}
+	return nil
 }
 
 func theClientIsOnTheSecondServer() error {
@@ -1036,23 +1054,23 @@ func FeatureContext(s *godog.Suite) {
 	s.Step(`^the client logs in with username "([^"]*)" and password "([^"]*)"$`, theClientLogsInWithUsernameAndPassword)
 	s.Step(`^the server sends the message A\|A\+$`, theServerSendsTheMessage("A", "A"))
 	s.Step(`^the server sends the message C\|PI\+$`, theServerSendsTheMessage("C", "PI"))
-	s.Step(`^the server received the message C\|PO\+$`, theServerReceivedTheMessage(defaultPort, "C", "PO"))
+	s.Step(`^the server received the message C\|PO\+$`, theServerReceivedTheMessage("C", "PO"))
 	s.Step(`^two seconds later$`, someMsLater(800))
 	s.Step(`^the client throws a "([^"]*)" error with message "([^"]*)"$`, theClientThrowsAnErrorWithMessage)
 	s.Step(`^the second test server is ready$`, theSecondTestServerIsReady)
 	s.Step(`^the second server has (\d+) active connections$`, theSecondServerHasActiveConnections)
 	s.Step(`^the server sends the message C\|CH\+$`, theServerSendsTheMessage("C", "CH"))
-	s.Step(`^the last message the server recieved is C\|CHR\|<FIRST_SERVER_URL>\+$`, theServerReceivedTheMessage(defaultPort, "C", "CHR", "127.0.0.1:9999"))
-	s.Step(`^the server sends the message C\|REJ\+$`, theServerSendsTheMessageCREJ)
+	s.Step(`^the last message the server recieved is C\|CHR\|<FIRST_SERVER_URL>\+$`, theServerReceivedTheMessage("C", "CHR", "127.0.0.1:9999"))
+	s.Step(`^the server sends the message C\|REJ\+$`, theServerSendsTheMessage("C", "REJ"))
 	s.Step(`^the server has received (\d+) messages$`, theServerHasReceivedMessages)
 	s.Step(`^the server sends the message C\|RED\|<SECOND_SERVER_URL>\+$`, theServerSendsTheMessage("C", "RED", "127.0.0.1:9998"))
 	s.Step(`^some time passes$`, someMsLater(100))
 	s.Step(`^the client is on the second server$`, theClientIsOnTheSecondServer)
-	s.Step(`^the last message the server recieved is A\|REQ\|{"([^"]*)":"XXX","([^"]*)":"YYY"}\+$`, theServerReceivedTheMessage(9998, "A", "REQ", `{"username":"XXX","password":"YYY"}`))
+	s.Step(`^the last message the server recieved is A\|REQ\|{"([^"]*)":"XXX","([^"]*)":"YYY"}\+$`, theServerReceivedTheMessage("A", "REQ", `{"username":"XXX","password":"YYY"}`))
 	s.Step(`^the last login was successful$`, theLastLoginWasSuccessful)
-	s.Step(`^the server sends the message A\|E\|INVALID_AUTH_DATA\|Sinvalid authentication data\+$`, theServerSendsTheMessageAEINVALIDAUTHDATASinvalidAuthenticationData)
-	s.Step(`^the last login failed with error message "([^"]*)"$`, theLastLoginFailedWithErrorMessage)
-	s.Step(`^the server sends the message A\|E\|TOO_MANY_AUTH_ATTEMPTS\|Stoo many authentication attempts\+$`, theServerSendsTheMessageAETOOMANYAUTHATTEMPTSStooManyAuthenticationAttempts)
+	s.Step(`^the server sends the message A\|E\|INVALID_AUTH_DATA\|Sinvalid authentication data\+$`, theServerSendsTheMessage("A", "E", "INVALID_AUTH_DATA", "Sinvalid authentication data"))
+	s.Step(`^the last login failed with error message "([^"]*)"$`, theClientThrowsAnErrorMessage)
+	s.Step(`^the server sends the message A\|E\|TOO_MANY_AUTH_ATTEMPTS\|Stoo many authentication attempts\+$`, theServerSendsTheMessage("A", "E", "TOO_MANY_AUTH_ATTEMPTS", "Stoo many authentication attempts"))
 	s.Step(`^the server resets its message count$`, theServerResetsItsMessageCount)
 	s.Step(`^the client subscribes to an event named "([^"]*)"$`, theClientSubscribesToAnEventNamed)
 	s.Step(`^the server sends the message E\|A\|S\|test(\d+)\+$`, theServerSendsTheMessageEAStest)
