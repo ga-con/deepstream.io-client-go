@@ -9,6 +9,7 @@ package deepstream
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/heynemann/deepstream.io-client-go/interfaces"
 )
@@ -22,6 +23,8 @@ type ClientOptions struct {
 	ReadTimeoutMs       int
 	Username            string
 	Password            string
+	HeartbeatIntervalMs int
+	ErrorHandler        func(error)
 }
 
 //DefaultOptions to connect to deepstream
@@ -31,9 +34,11 @@ func DefaultOptions() *ClientOptions {
 		AutoLogin:           true,
 		Username:            "",
 		Password:            "",
+		ErrorHandler:        nil,
 		ConnectionTimeoutMs: 100,
 		WriteTimeoutMs:      100,
 		ReadTimeoutMs:       100,
+		HeartbeatIntervalMs: 2000,
 	}
 }
 
@@ -42,8 +47,9 @@ type Client struct {
 	AuthParams     map[string]interface{}
 	Connector      *Connector
 	Options        *ClientOptions
-	loginRequested bool
 	Event          *EventManager
+	loginRequested bool
+	lastHeartbeat  time.Time
 }
 
 //New creates a new client
@@ -85,8 +91,34 @@ func (c *Client) startMonitoringConnection() error {
 	if err != nil {
 		return err
 	}
+	c.lastHeartbeat = time.Now()
+	c.startMonitoringHeartbeat()
 	return nil
 }
+
+func (c *Client) startMonitoringHeartbeat() {
+	tolerance := time.Duration(c.Options.HeartbeatIntervalMs*2) * time.Millisecond
+
+	go func() {
+		for {
+			if time.Now().Sub(c.lastHeartbeat) > tolerance {
+				//TODO: Change this to a typed error
+				c.Error(fmt.Errorf("Two connections heartbeats missed successively"))
+				c.Close()
+				return
+			}
+			time.Sleep(time.Duration(c.Options.HeartbeatIntervalMs) * time.Millisecond)
+		}
+	}()
+}
+
+//var heartBeatTolerance = this._options.heartbeatInterval * 2;
+
+//if( Date.now() - this._lastHeartBeat > heartBeatTolerance ) {
+//clearInterval( this._heartbeatInterval );
+//this._endpoint.close();
+//this._onError( 'Two connections heartbeats missed successively' );
+//}
 
 //GetConnectionState returns the connection state for the connector
 func (c *Client) GetConnectionState() interfaces.ConnectionState {
@@ -94,6 +126,7 @@ func (c *Client) GetConnectionState() interfaces.ConnectionState {
 }
 
 func (c *Client) onMessage(msg *Message) {
+	//fmt.Println(msg)
 	var err error
 	switch {
 	case msg.Topic == "C":
@@ -105,7 +138,7 @@ func (c *Client) onMessage(msg *Message) {
 	}
 
 	if err != nil {
-		//On error?
+		c.Error(err)
 	}
 }
 
@@ -117,6 +150,8 @@ func (c *Client) handleConnectionMessages(msg *Message) error {
 		if c.Connector.ConnectionState == interfaces.ConnectionStateChallenging {
 			return c.handleChallengeAck(msg)
 		}
+	case msg.Action == "PI":
+		return c.handlePing(msg)
 	default:
 		fmt.Println("Message not understood!")
 	}
@@ -138,6 +173,11 @@ func (c *Client) handleChallengeAck(msg *Message) error {
 	return nil
 }
 
+func (c *Client) handlePing(msg *Message) error {
+	pong := &PongAction{}
+	return c.Connector.WriteMessage([]byte(pong.ToAction()))
+}
+
 //Login to deepstream - if connection is still being started, it will login as soon as possible
 func (c *Client) Login() error {
 	state := c.GetConnectionState()
@@ -148,7 +188,7 @@ func (c *Client) Login() error {
 	}
 
 	if state != interfaces.ConnectionStateAwaitingConnection {
-		return c.Error(fmt.Errorf("The connection should be restored before logging in (%s).", state))
+		return fmt.Errorf("The connection should be restored before logging in (%s).", state)
 	}
 
 	c.loginRequested = false
@@ -171,7 +211,10 @@ func (c *Client) handleAuthenticationMessages(msg *Message) error {
 			return c.handleAuthenticationAck(msg)
 		}
 	case msg.Action == "E":
-		return c.Error(fmt.Errorf("Could not connect to deepstream.io server with the provided credentials (user: %s).", c.AuthParams["user"]))
+		return fmt.Errorf(
+			"Could not connect to deepstream.io server with the provided credentials (user: %s).",
+			c.AuthParams["user"],
+		)
 	default:
 		fmt.Println("Message not understood!")
 	}
@@ -200,5 +243,21 @@ func (c *Client) handleEventMessages(msg *Message) error {
 //Error handlers errors in client
 func (c *Client) Error(err error) error {
 	c.Connector.ConnectionState = interfaces.ConnectionStateError
+	c.onError(err)
 	return err
+}
+
+//Close the connection
+func (c *Client) Close() error {
+	err := c.Connector.Close()
+	if err != nil {
+		return c.Error(err)
+	}
+	return nil
+}
+
+func (c *Client) onError(err error) {
+	if c.Options.ErrorHandler != nil {
+		c.Options.ErrorHandler(err)
+	}
 }

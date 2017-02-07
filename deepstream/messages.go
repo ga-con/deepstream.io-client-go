@@ -175,3 +175,15 @@ func (a *PublishEventAction) ToAction() (string, error) {
 		interfaces.MessageSeparator,
 	), nil
 }
+
+//PongAction sends a response to a ping request
+type PongAction struct{}
+
+//ToAction converts to the action to be sent to the server
+func (a *PongAction) ToAction() string {
+	return fmt.Sprintf(
+		"C%sPO%s",
+		interfaces.MessagePartSeparator,
+		interfaces.MessageSeparator,
+	)
+}

@@ -10,13 +10,23 @@ import (
 	"github.com/DATA-DOG/godog"
 	"github.com/gorilla/websocket"
 	"github.com/heynemann/deepstream.io-client-go/deepstream"
+	"github.com/heynemann/deepstream.io-client-go/interfaces"
 	uuid "github.com/satori/go.uuid"
 )
 
+const TimeMultiplier = 0.01
+
+var receivedErrors []error
 var client *deepstream.Client
 var testServer *TestServer
 
 func afterScenario(interface{}, error) {
+	receivedErrors = []error{}
+	if client != nil {
+		client.Close()
+		client = nil
+	}
+
 	if testServer != nil {
 		testServer.stop()
 		time.Sleep(10 * time.Millisecond)
@@ -75,8 +85,12 @@ func (ts *TestServer) handler(w http.ResponseWriter, r *http.Request) {
 		_, msg, err := c.ReadMessage()
 
 		if websocket.IsCloseError(err) {
-			fmt.Println("Closing!")
 			c.Close()
+			delete(ts.websocketConnections, id)
+			ts.activeConnections--
+			return
+		}
+		if err != nil {
 			delete(ts.websocketConnections, id)
 			ts.activeConnections--
 			return
@@ -84,6 +98,28 @@ func (ts *TestServer) handler(w http.ResponseWriter, r *http.Request) {
 
 		ts.ReceivedMessages = append(ts.ReceivedMessages, string(msg))
 	}
+}
+
+func (ts *TestServer) sendMessage(message string) error {
+	var err error
+	for _, conn := range ts.websocketConnections {
+		err = conn.WriteMessage(websocket.TextMessage, []byte(message))
+	}
+	if err != nil {
+		return err
+	}
+	time.Sleep(10 * time.Millisecond)
+	return nil
+}
+
+func (ts *TestServer) hasMessage(expectedMessage string) error {
+	for _, msg := range ts.ReceivedMessages {
+		if msg == expectedMessage {
+			return nil
+		}
+	}
+
+	return fmt.Errorf("Message '%s' was not received by the server.", expectedMessage)
 }
 
 func startServer(port int) error {
@@ -108,21 +144,40 @@ func theTestServerIsReady() error {
 	return nil
 }
 
-func theServerHasActiveConnections(arg1 int) error {
+func theServerHasActiveConnections(expectedConnections int) error {
 	if testServer == nil {
 		return fmt.Errorf("Server is not up!")
 	}
 
 	activeConnections := testServer.activeConnections
-	if activeConnections != arg1 {
-		return fmt.Errorf("Expected %d active connections to server, but %d are active.", arg1, activeConnections)
+	if activeConnections != expectedConnections {
+		return fmt.Errorf("Expected %d active connections to server, but %d are active.", expectedConnections, activeConnections)
 	}
 	return nil
 }
 
+func handleClientErrors(err error) {
+	receivedErrors = append(receivedErrors, err)
+}
+
 func theClientIsInitialised() error {
 	var err error
-	client, err = deepstream.New("127.0.0.1:9999")
+	opts := deepstream.DefaultOptions()
+	opts.ErrorHandler = handleClientErrors
+	client, err = deepstream.New("127.0.0.1:9999", opts)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func theClientIsInitialisedWithASmallHeartbeatInterval() error {
+	var err error
+	opts := deepstream.DefaultOptions()
+	opts.AutoLogin = false
+	opts.HeartbeatIntervalMs = 20
+	opts.ErrorHandler = handleClientErrors
+	client, err = deepstream.New("127.0.0.1:9999", opts)
 	if err != nil {
 		return err
 	}
@@ -137,36 +192,52 @@ func theClientsConnectionStateIs(arg1 string) error {
 	return nil
 }
 
-func theClientIsInitialisedWithASmallHeartbeatInterval() error {
-	return godog.ErrPending
+func theServerSendsTheMessage(topic, action string) func() error {
+	return func() error {
+		return testServer.sendMessage(
+			fmt.Sprintf("%s%s%s%s", topic, interfaces.MessagePartSeparator, action, interfaces.MessageSeparator),
+		)
+	}
 }
 
-func theServerSendsTheMessageCA() error {
-	return godog.ErrPending
+func theClientLogsInWithUsernameAndPassword(username, password string) error {
+	client.Options.Username = username
+	client.Options.Password = password
+	err := client.Login()
+	if err != nil {
+		return err
+	}
+
+	time.Sleep(10 * time.Millisecond)
+	return nil
 }
 
-func theClientLogsInWithUsernameAndPassword(arg1, arg2 string) error {
-	return godog.ErrPending
+func theServerReceivedTheMessage(topic, action string) func() error {
+	return func() error {
+		expectedMessage := fmt.Sprintf(
+			"%s%s%s%s", topic, interfaces.MessagePartSeparator,
+			action, interfaces.MessageSeparator,
+		)
+
+		return testServer.hasMessage(expectedMessage)
+	}
 }
 
-func theServerSendsTheMessageAA() error {
-	return godog.ErrPending
+func someMsLater(ms int) func() error {
+	return func() error {
+		duration := int(float64(ms) * TimeMultiplier)
+		time.Sleep(time.Duration(duration) * time.Millisecond)
+		return nil
+	}
 }
 
-func theServerSendsTheMessageCPI() error {
-	return godog.ErrPending
-}
-
-func theServerReceivedTheMessageCPO() error {
-	return godog.ErrPending
-}
-
-func twoSecondsLater() error {
-	return godog.ErrPending
-}
-
-func theClientThrowsAErrorWithMessage(arg1, arg2 string) error {
-	return godog.ErrPending
+func theClientThrowsAnErrorWithMessage(expectedError, expectedMessage string) error {
+	for _, err := range receivedErrors {
+		if err.Error() == expectedMessage {
+			return nil
+		}
+	}
+	return fmt.Errorf("The error with message '%s' did not happen.", expectedMessage)
 }
 
 func theSecondTestServerIsReady() error {
@@ -913,13 +984,13 @@ func FeatureContext(s *godog.Suite) {
 	s.Step(`^the client is initialised$`, theClientIsInitialised)
 	s.Step(`^the clients connection state is "([^"]*)"$`, theClientsConnectionStateIs)
 	s.Step(`^the client is initialised with a small heartbeat interval$`, theClientIsInitialisedWithASmallHeartbeatInterval)
-	s.Step(`^the server sends the message C\|A\+$`, theServerSendsTheMessageCA)
+	s.Step(`^the server sends the message C\|A\+$`, theServerSendsTheMessage("C", "A"))
 	s.Step(`^the client logs in with username "([^"]*)" and password "([^"]*)"$`, theClientLogsInWithUsernameAndPassword)
-	s.Step(`^the server sends the message A\|A\+$`, theServerSendsTheMessageAA)
-	s.Step(`^the server sends the message C\|PI\+$`, theServerSendsTheMessageCPI)
-	s.Step(`^the server received the message C\|PO\+$`, theServerReceivedTheMessageCPO)
-	s.Step(`^two seconds later$`, twoSecondsLater)
-	s.Step(`^the client throws a "([^"]*)" error with message "([^"]*)"$`, theClientThrowsAErrorWithMessage)
+	s.Step(`^the server sends the message A\|A\+$`, theServerSendsTheMessage("A", "A"))
+	s.Step(`^the server sends the message C\|PI\+$`, theServerSendsTheMessage("C", "PI"))
+	s.Step(`^the server received the message C\|PO\+$`, theServerReceivedTheMessage("C", "PO"))
+	s.Step(`^two seconds later$`, someMsLater(2000))
+	s.Step(`^the client throws a "([^"]*)" error with message "([^"]*)"$`, theClientThrowsAnErrorWithMessage)
 	s.Step(`^the second test server is ready$`, theSecondTestServerIsReady)
 	s.Step(`^the second server has (\d+) active connections$`, theSecondServerHasActiveConnections)
 	s.Step(`^the server sends the message C\|CH\+$`, theServerSendsTheMessageCCH)

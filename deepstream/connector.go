@@ -60,12 +60,16 @@ func (c *Connector) Connect() error {
 
 	go func() {
 		for {
-			//c.Client.SetReadDeadline(time.Now().Add(time.Duration(c.ReadTimeoutMs) * time.Millisecond))
 			messageType, msgBytes, err := c.Client.ReadMessage()
-			if err != nil {
-				//ON ERROR?
-				continue
+			//fmt.Println(err)
+			if websocket.IsCloseError(err) {
+				c.Close()
+				return
 			}
+			if err != nil {
+				return
+			}
+
 			if messageType == websocket.BinaryMessage {
 				//ON ERROR?
 				//return fmt.Errorf("Message not understood")
@@ -116,4 +120,14 @@ func (c *Connector) WriteMessage(msg []byte, msgTypeOrNil ...int) error {
 		msgType = msgTypeOrNil[1]
 	}
 	return c.Client.WriteMessage(msgType, msg)
+}
+
+//Close the connection to deepstream
+func (c *Connector) Close() error {
+	err := c.Client.Close()
+	if err != nil {
+		return err
+	}
+	c.ConnectionState = interfaces.ConnectionStateClosed
+	return nil
 }
