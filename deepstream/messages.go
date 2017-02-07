@@ -46,11 +46,8 @@ type AuthRequestAction struct {
 
 //NewAuthRequestAction creates a new auth request action
 func NewAuthRequestAction(authParams map[string]interface{}) (*AuthRequestAction, error) {
-	data, err := json.Marshal(authParams)
-	if err != nil {
-		return nil, err
-	}
-	return &AuthRequestAction{AuthParams: string(data)}, nil
+	data := fmt.Sprintf(`{"username":"%s","password":"%s"}`, authParams["username"], authParams["password"])
+	return &AuthRequestAction{AuthParams: data}, nil
 }
 
 //ToAction converts to the action to be sent to the server

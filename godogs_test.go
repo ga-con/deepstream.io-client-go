@@ -5,6 +5,7 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/DATA-DOG/godog"
@@ -130,7 +131,8 @@ func startServer(port int) error {
 	}
 
 	ts := &TestServer{
-		Port: port,
+		Port:             port,
+		ReceivedMessages: []string{},
 	}
 	err := ts.start()
 	if err != nil {
@@ -147,6 +149,7 @@ func theTestServerIsReady() error {
 	if err != nil {
 		return err
 	}
+	time.Sleep(20 * time.Millisecond)
 	return nil
 }
 
@@ -165,6 +168,7 @@ func handleClientErrors(err error) {
 func theClientIsInitialised() error {
 	var err error
 	opts := deepstream.DefaultOptions()
+	opts.AutoLogin = false
 	opts.ErrorHandler = handleClientErrors
 	url := fmt.Sprintf("127.0.0.1:%d", defaultPort)
 	client, err = deepstream.New(url, opts)
@@ -196,34 +200,65 @@ func theClientsConnectionStateIs(arg1 string) error {
 	return nil
 }
 
-func theServerSendsTheMessage(topic, action string) func() error {
+func theServerSendsTheMessage(topic, action string, data ...string) func() error {
 	return func() error {
-		return testServers[defaultPort].sendMessage(
-			fmt.Sprintf("%s%s%s%s", topic, interfaces.MessagePartSeparator, action, interfaces.MessageSeparator),
-		)
+		dataMsg := ""
+		if len(data) > 0 {
+			dataMsg = fmt.Sprintf(
+				"%s%s", interfaces.MessagePartSeparator,
+				strings.Join(data, interfaces.MessagePartSeparator),
+			)
+		}
+
+		var err error
+		for _, ts := range testServers {
+			err = ts.sendMessage(
+				fmt.Sprintf(
+					"%s%s%s%s%s", topic, interfaces.MessagePartSeparator,
+					action, dataMsg, interfaces.MessageSeparator,
+				),
+			)
+		}
+
+		return err
 	}
 }
 
 func theClientLogsInWithUsernameAndPassword(username, password string) error {
 	client.Options.Username = username
 	client.Options.Password = password
+	client.AuthParams = map[string]interface{}{
+		"username": username,
+		"password": password,
+	}
+
 	err := client.Login()
 	if err != nil {
 		return err
 	}
 
-	time.Sleep(10 * time.Millisecond)
+	time.Sleep(30 * time.Millisecond)
 	return nil
 }
 
-func theServerReceivedTheMessage(topic, action string) func() error {
+func theServerReceivedTheMessage(port int, topic, action string, data ...string) func() error {
 	return func() error {
-		expectedMessage := fmt.Sprintf(
-			"%s%s%s%s", topic, interfaces.MessagePartSeparator,
-			action, interfaces.MessageSeparator,
-		)
+		ts := testServers[port]
+		dataMsg := ""
 
-		return testServers[defaultPort].hasMessage(expectedMessage)
+		if len(data) > 0 {
+			dataMsg = fmt.Sprintf(
+				"%s%s",
+				interfaces.MessagePartSeparator,
+				strings.Join(data, interfaces.MessagePartSeparator),
+			)
+		}
+
+		expectedMessage := fmt.Sprintf(
+			"%s%s%s%s%s", topic, interfaces.MessagePartSeparator,
+			action, dataMsg, interfaces.MessageSeparator,
+		)
+		return ts.hasMessage(expectedMessage)
 	}
 }
 
@@ -245,19 +280,21 @@ func theClientThrowsAnErrorWithMessage(expectedError, expectedMessage string) er
 }
 
 func theSecondTestServerIsReady() error {
-	return godog.ErrPending
+	var err error
+	err = startServer(9998)
+	if err != nil {
+		return err
+	}
+	time.Sleep(20 * time.Millisecond)
+	return nil
 }
 
-func theSecondServerHasActiveConnections(arg1 int) error {
-	return godog.ErrPending
-}
-
-func theServerSendsTheMessageCCH() error {
-	return godog.ErrPending
-}
-
-func theLastMessageTheServerRecievedIsCCHRFIRSTSERVERURL() error {
-	return godog.ErrPending
+func theSecondServerHasActiveConnections(expectedConnections int) error {
+	activeConnections := testServers[9998].activeConnections
+	if activeConnections != expectedConnections {
+		return fmt.Errorf("Expected %d active connections to server, but %d are active.", expectedConnections, activeConnections)
+	}
+	return nil
 }
 
 func theServerSendsTheMessageCREJ() error {
@@ -268,24 +305,26 @@ func theServerHasReceivedMessages(arg1 int) error {
 	return godog.ErrPending
 }
 
-func theServerSendsTheMessageCREDSECONDSERVERURL() error {
-	return godog.ErrPending
-}
-
-func someTimePasses() error {
-	return godog.ErrPending
-}
-
 func theClientIsOnTheSecondServer() error {
-	return godog.ErrPending
-}
-
-func theLastMessageTheServerRecievedIsAREQXXXYYY(arg1, arg2 string) error {
-	return godog.ErrPending
+	if client.Connector.URL != "127.0.0.1:9998" {
+		return fmt.Errorf("Client should be connected to second server but it is connected to %s", client.Connector.URL)
+	}
+	return nil
 }
 
 func theLastLoginWasSuccessful() error {
-	return godog.ErrPending
+	if len(receivedErrors) > 0 {
+		errors := make([]string, len(receivedErrors))
+		for i, err := range receivedErrors {
+			errors[i] = err.Error()
+		}
+		return fmt.Errorf(
+			"The login was not successful. The current connection state is %s (errors: %s).",
+			client.GetConnectionState(),
+			strings.Join(errors, ", "),
+		)
+	}
+	return nil
 }
 
 func theServerSendsTheMessageAEINVALIDAUTHDATASinvalidAuthenticationData() error {
@@ -992,19 +1031,19 @@ func FeatureContext(s *godog.Suite) {
 	s.Step(`^the client logs in with username "([^"]*)" and password "([^"]*)"$`, theClientLogsInWithUsernameAndPassword)
 	s.Step(`^the server sends the message A\|A\+$`, theServerSendsTheMessage("A", "A"))
 	s.Step(`^the server sends the message C\|PI\+$`, theServerSendsTheMessage("C", "PI"))
-	s.Step(`^the server received the message C\|PO\+$`, theServerReceivedTheMessage("C", "PO"))
+	s.Step(`^the server received the message C\|PO\+$`, theServerReceivedTheMessage(defaultPort, "C", "PO"))
 	s.Step(`^two seconds later$`, someMsLater(2000))
 	s.Step(`^the client throws a "([^"]*)" error with message "([^"]*)"$`, theClientThrowsAnErrorWithMessage)
 	s.Step(`^the second test server is ready$`, theSecondTestServerIsReady)
 	s.Step(`^the second server has (\d+) active connections$`, theSecondServerHasActiveConnections)
-	s.Step(`^the server sends the message C\|CH\+$`, theServerSendsTheMessageCCH)
-	s.Step(`^the last message the server recieved is C\|CHR\|<FIRST_SERVER_URL>\+$`, theLastMessageTheServerRecievedIsCCHRFIRSTSERVERURL)
+	s.Step(`^the server sends the message C\|CH\+$`, theServerSendsTheMessage("C", "CH"))
+	s.Step(`^the last message the server recieved is C\|CHR\|<FIRST_SERVER_URL>\+$`, theServerReceivedTheMessage(defaultPort, "C", "CHR", "127.0.0.1:9999"))
 	s.Step(`^the server sends the message C\|REJ\+$`, theServerSendsTheMessageCREJ)
 	s.Step(`^the server has received (\d+) messages$`, theServerHasReceivedMessages)
-	s.Step(`^the server sends the message C\|RED\|<SECOND_SERVER_URL>\+$`, theServerSendsTheMessageCREDSECONDSERVERURL)
-	s.Step(`^some time passes$`, someTimePasses)
+	s.Step(`^the server sends the message C\|RED\|<SECOND_SERVER_URL>\+$`, theServerSendsTheMessage("C", "RED", "127.0.0.1:9998"))
+	s.Step(`^some time passes$`, someMsLater(2000))
 	s.Step(`^the client is on the second server$`, theClientIsOnTheSecondServer)
-	s.Step(`^the last message the server recieved is A\|REQ\|{"([^"]*)":"XXX","([^"]*)":"YYY"}\+$`, theLastMessageTheServerRecievedIsAREQXXXYYY)
+	s.Step(`^the last message the server recieved is A\|REQ\|{"([^"]*)":"XXX","([^"]*)":"YYY"}\+$`, theServerReceivedTheMessage(9998, "A", "REQ", `{"username":"XXX","password":"YYY"}`))
 	s.Step(`^the last login was successful$`, theLastLoginWasSuccessful)
 	s.Step(`^the server sends the message A\|E\|INVALID_AUTH_DATA\|Sinvalid authentication data\+$`, theServerSendsTheMessageAEINVALIDAUTHDATASinvalidAuthenticationData)
 	s.Step(`^the last login failed with error message "([^"]*)"$`, theLastLoginFailedWithErrorMessage)

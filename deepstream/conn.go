@@ -144,6 +144,8 @@ func (c *Client) handleConnectionMessages(msg *Message) error {
 		}
 	case msg.Action == "PI":
 		return c.handlePing(msg)
+	case msg.Action == "RED":
+		return c.handleRedirect(msg)
 	default:
 		fmt.Println("Message not understood!")
 	}
@@ -170,11 +172,25 @@ func (c *Client) handlePing(msg *Message) error {
 	return c.Connector.WriteMessage([]byte(pong.ToAction()))
 }
 
+func (c *Client) handleRedirect(msg *Message) error {
+	url := msg.Data[0]
+	err := c.Connector.Close()
+	if err != nil {
+		return err
+	}
+	c.Connector.URL = url
+	err = c.Connector.Connect()
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 //Login to deepstream - if connection is still being started, it will login as soon as possible
 func (c *Client) Login() error {
 	state := c.GetConnectionState()
-	if !c.Options.AutoLogin && (state == interfaces.ConnectionStateChallenging ||
-		state == interfaces.ConnectionStateAwaitingConnection) {
+
+	if !c.Options.AutoLogin && state != interfaces.ConnectionStateAwaitingConnection {
 		c.loginRequested = true
 		return nil
 	}
@@ -205,7 +221,7 @@ func (c *Client) handleAuthenticationMessages(msg *Message) error {
 	case msg.Action == "E":
 		return fmt.Errorf(
 			"Could not connect to deepstream.io server with the provided credentials (user: %s).",
-			c.AuthParams["user"],
+			c.AuthParams["username"],
 		)
 	default:
 		fmt.Println("Message not understood!")

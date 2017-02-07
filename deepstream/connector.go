@@ -47,6 +47,7 @@ func NewConnector(url string, connectionTimeoutMs, writeTimeoutMs, readTimeoutMs
 
 //Connect to deepstream using websocket and starts monitoring traffic in the background
 func (c *Connector) Connect() error {
+	c.ConnectionState = interfaces.ConnectionStateAwaitingConnection
 	url := fmt.Sprintf("ws://%s/deepstream", c.URL)
 
 	dialer := websocket.DefaultDialer
