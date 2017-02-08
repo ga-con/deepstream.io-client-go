@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/heynemann/deepstream.io-client-go/deepstream"
+	"github.com/heynemann/deepstream.io-client-go/interfaces"
 )
 
 var receivedEvents []*deepstream.EventMessage
@@ -27,7 +28,7 @@ func theClientIsInitialised() error {
 	opts.AutoLogin = false
 	opts.HeartbeatIntervalMs = 100000000
 	opts.ErrorHandler = handleClientErrors
-	url := fmt.Sprintf("127.0.0.1:%d", defaultPort)
+	url := fmt.Sprintf("localhost:%d", defaultPort)
 	client, err = deepstream.New(url, opts)
 	if err != nil {
 		return err
@@ -41,7 +42,7 @@ func theClientIsInitialisedWithASmallHeartbeatInterval() error {
 	opts.AutoLogin = false
 	opts.HeartbeatIntervalMs = 300
 	opts.ErrorHandler = handleClientErrors
-	url := fmt.Sprintf("127.0.0.1:%d", defaultPort)
+	url := fmt.Sprintf("localhost:%d", defaultPort)
 	client, err = deepstream.New(url, opts)
 	if err != nil {
 		return err
@@ -53,6 +54,19 @@ func theClientsConnectionStateIs(arg1 string) error {
 	state := client.GetConnectionState()
 	if string(state) != arg1 {
 		return fmt.Errorf("Expected state to be %s but it was %s.", arg1, state)
+	}
+	return nil
+}
+
+func reconnectServerAndCheckState() error {
+	err := deepstream.StartTestServer(defaultPort)
+	if err != nil {
+		return err
+	}
+	time.Sleep(500 * time.Millisecond)
+	state := client.GetConnectionState()
+	if string(state) != string(interfaces.ConnectionStateReconnecting) {
+		return fmt.Errorf("Expected state to be RECONNECTING but it was %s.", state)
 	}
 	return nil
 }
@@ -77,7 +91,17 @@ func theClientThrowsAnErrorWithMessage(expectedError, expectedMessage string) er
 			return nil
 		}
 	}
-	return fmt.Errorf("The error with message '%s' did not happen.", expectedMessage)
+
+	errors := make([]string, len(receivedErrors))
+	for i, err := range receivedErrors {
+		errors[i] = err.Error()
+	}
+
+	return fmt.Errorf(
+		"The error with message '%s' did not happen (errors: %s).",
+		expectedMessage,
+		strings.Join(errors, ", "),
+	)
 }
 
 func theClientThrowsAnErrorMessage(expectedMessage string) error {
@@ -90,7 +114,7 @@ func theClientThrowsAnErrorMessage(expectedMessage string) error {
 }
 
 func theClientIsOnTheSecondServer() error {
-	if client.Connector.URL != "127.0.0.1:9998" {
+	if client.Connector.URL != "localhost:9998" {
 		return fmt.Errorf("Client should be connected to second server but it is connected to %s", client.Connector.URL)
 	}
 	return nil
@@ -145,6 +169,12 @@ func theClientReceivedEvent(eventName, eventData string) error {
 
 func theClientPublishesAnEvent(eventName, eventData string) error {
 	err := client.Event.Publish(eventName, eventData)
+	time.Sleep(10 * time.Millisecond)
+	return err
+}
+
+func theClientListensToEvents(eventPattern string) error {
+	err := client.Event.Listen(eventPattern, handleEventReceived)
 	time.Sleep(10 * time.Millisecond)
 	return err
 }

@@ -29,10 +29,11 @@ type Connector struct {
 	ConnectionState     interfaces.ConnectionState
 	Client              *websocket.Conn
 	MessageHandlers     []OnMessageHandler
+	CloseHandler        func(string) error
 }
 
 //NewConnector creates a new connector to the specified Deepstream server url
-func NewConnector(url string, connectionTimeoutMs, writeTimeoutMs, readTimeoutMs int) *Connector {
+func NewConnector(url string, connectionTimeoutMs, writeTimeoutMs, readTimeoutMs int, closeHandler func(string) error) *Connector {
 	return &Connector{
 		ConnectionTimeoutMs: connectionTimeoutMs,
 		WriteTimeoutMs:      writeTimeoutMs,
@@ -42,12 +43,15 @@ func NewConnector(url string, connectionTimeoutMs, writeTimeoutMs, readTimeoutMs
 		Client:              nil,
 		ConnectionState:     interfaces.ConnectionStateAwaitingConnection,
 		URL:                 url,
+		CloseHandler:        closeHandler,
 	}
 }
 
 //Connect to deepstream using websocket and starts monitoring traffic in the background
 func (c *Connector) Connect() error {
-	c.ConnectionState = interfaces.ConnectionStateAwaitingConnection
+	if c.ConnectionState != interfaces.ConnectionStateReconnecting {
+		c.ConnectionState = interfaces.ConnectionStateAwaitingConnection
+	}
 	url := fmt.Sprintf("ws://%s/deepstream", c.URL)
 
 	dialer := websocket.DefaultDialer
@@ -66,8 +70,12 @@ func (c *Connector) Connect() error {
 			}
 
 			messageType, msgBytes, err := c.Client.ReadMessage()
-			if websocket.IsCloseError(err) {
+			if websocket.IsCloseError(err) || websocket.IsUnexpectedCloseError(err) {
 				c.Close()
+				c.ConnectionState = interfaces.ConnectionStateClosed
+				if c.CloseHandler != nil {
+					c.CloseHandler(string(err.Error()))
+				}
 				return
 			}
 			if err != nil {

@@ -9,6 +9,7 @@ package deepstream
 
 import (
 	"fmt"
+	"io"
 	"log"
 	"net"
 	"net/http"
@@ -18,6 +19,20 @@ import (
 	uuid "github.com/satori/go.uuid"
 )
 
+type tcpKeepAliveListener struct {
+	*net.TCPListener
+}
+
+func (ln tcpKeepAliveListener) Accept() (c net.Conn, err error) {
+	tc, err := ln.AcceptTCP()
+	if err != nil {
+		return
+	}
+	tc.SetKeepAlive(false)
+	tc.SetKeepAlivePeriod(3 * time.Minute)
+	return tc, nil
+}
+
 //TestServers list all servers by port
 var TestServers = map[int]*TestServer{}
 
@@ -25,40 +40,78 @@ var TestServers = map[int]*TestServer{}
 type TestServer struct {
 	Port                 int
 	Listener             net.Listener
+	Server               http.Server
+	Closer               io.Closer
 	WebsocketConnections map[string]*websocket.Conn
 	ActiveConnections    int
 	upgrader             websocket.Upgrader
 	ReceivedMessages     []string
 	ReceivedErrors       []error
+	shouldStop           bool
 }
 
 //Start the test server
 func (ts *TestServer) Start() error {
+	ts.shouldStop = false
 	ts.WebsocketConnections = map[string]*websocket.Conn{}
 	ts.upgrader = websocket.Upgrader{} // use default options
-	ln, err := net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", ts.Port))
-	if err != nil {
-		return err
-	}
-	ts.Listener = ln
+	fmt.Println("===========================> LISTENING <=======================", ts.Port)
 
 	serverMux := http.NewServeMux()
 	serverMux.HandleFunc("/deepstream", ts.handler)
 
-	server := http.Server{
-		Handler: serverMux,
+	var err error
+	ts.Closer, err = listenAndServeWithClose(fmt.Sprintf("127.0.0.1:%d", ts.Port), serverMux)
+	if err != nil {
+		return err
 	}
-
-	go func() {
-		server.Serve(ln)
-	}()
 
 	return nil
 }
 
+func listenAndServeWithClose(addr string, handler http.Handler) (io.Closer, error) {
+	var (
+		listener  net.Listener
+		srvCloser io.Closer
+		err       error
+	)
+
+	srv := &http.Server{Addr: addr, Handler: handler}
+
+	if addr == "" {
+		addr = ":http"
+	}
+
+	listener, err = net.Listen("tcp", addr)
+	if err != nil {
+		return nil, err
+	}
+
+	go func() {
+		err := srv.Serve(tcpKeepAliveListener{listener.(*net.TCPListener)})
+		if err != nil {
+			log.Println("HTTP Server Error - ", err)
+		}
+	}()
+
+	srvCloser = listener
+	return srvCloser, nil
+}
+
 //Stop the test server
 func (ts *TestServer) Stop() {
-	ts.Listener.Close()
+	//ts.shouldStop = true
+	for _, ws := range ts.WebsocketConnections {
+		ws.Close()
+	}
+	ts.WebsocketConnections = map[string]*websocket.Conn{}
+	ts.ActiveConnections = 0
+	if ts.Closer != nil {
+		ts.Closer.Close()
+		time.Sleep(500 * time.Millisecond) // Wait for ports to be reclaimed by OS
+	}
+	//ts.Listener.Close()
+	//ts.Listener = nil
 }
 
 func (ts *TestServer) handler(w http.ResponseWriter, r *http.Request) {
@@ -72,6 +125,7 @@ func (ts *TestServer) handler(w http.ResponseWriter, r *http.Request) {
 	ts.WebsocketConnections[id] = c
 
 	for {
+		c.SetReadDeadline(time.Now().Add(100 * time.Millisecond))
 		_, msg, err := c.ReadMessage()
 
 		if websocket.IsCloseError(err) {
@@ -87,6 +141,9 @@ func (ts *TestServer) handler(w http.ResponseWriter, r *http.Request) {
 		}
 
 		ts.ReceivedMessages = append(ts.ReceivedMessages, string(msg))
+		if ts.shouldStop {
+			return
+		}
 	}
 }
 

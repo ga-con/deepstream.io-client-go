@@ -109,3 +109,10 @@ func theServerHasReceivedMessages(numberOfMessages int) error {
 	}
 	return nil
 }
+
+func theConnectionToTheServerIsLost() error {
+	deepstream.TestServers[defaultPort].Stop()
+	delete(deepstream.TestServers, defaultPort)
+	time.Sleep(50 * time.Millisecond)
+	return nil
+}

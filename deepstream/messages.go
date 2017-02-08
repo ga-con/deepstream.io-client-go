@@ -93,6 +93,22 @@ func (a *UnsubscribeFromEventAction) ToAction() string {
 	)
 }
 
+//ListenToEventAction sends a message to deepstream to listen to a given event
+type ListenToEventAction struct {
+	EventPattern string
+}
+
+//ToAction converts to the action to be sent to the server
+func (a *ListenToEventAction) ToAction() string {
+	return fmt.Sprintf(
+		"E%sL%s%s%s",
+		interfaces.MessagePartSeparator,
+		interfaces.MessagePartSeparator,
+		a.EventPattern,
+		interfaces.MessageSeparator,
+	)
+}
+
 //PublishEventAction sends a message to deepstream to publish an event
 type PublishEventAction struct {
 	Event string

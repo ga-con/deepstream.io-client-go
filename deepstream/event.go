@@ -10,6 +10,8 @@ package deepstream
 import (
 	"fmt"
 	"strings"
+
+	"github.com/heynemann/deepstream.io-client-go/interfaces"
 )
 
 //EventMessage represents a message received due to a subscription
@@ -32,6 +34,7 @@ type EventSubscription struct {
 type EventManager struct {
 	client        *Client
 	Subscriptions map[string]*EventSubscription
+	Listeners     map[string]*EventSubscription
 }
 
 //NewEventManager creates a new Event Manager
@@ -39,25 +42,51 @@ func NewEventManager(cli *Client) *EventManager {
 	return &EventManager{
 		client:        cli,
 		Subscriptions: map[string]*EventSubscription{},
+		Listeners:     map[string]*EventSubscription{},
 	}
 }
 
 //Subscribe to events in deepstream.io
 func (e *EventManager) Subscribe(event string, handler EventHandler) error {
-	if sub, ok := e.Subscriptions[event]; ok {
+	action := &SubscribeToEventAction{
+		Event: event,
+	}
+	return e.listenToEvents(
+		e.Subscriptions,
+		action,
+		event,
+		handler,
+	)
+}
+
+//Listen to events in deepstream.io with the specified pattern
+func (e *EventManager) Listen(eventPattern string, handler EventHandler) error {
+	action := &ListenToEventAction{
+		EventPattern: eventPattern,
+	}
+	return e.listenToEvents(
+		e.Listeners,
+		action,
+		eventPattern,
+		handler,
+	)
+}
+
+func (e *EventManager) listenToEvents(
+	coll map[string]*EventSubscription, action interfaces.Action,
+	eventPattern string, handler EventHandler,
+) error {
+	if sub, ok := coll[eventPattern]; ok {
 		sub.Handlers = append(sub.Handlers, handler)
 		return nil
 	}
 
-	e.Subscriptions[event] = &EventSubscription{
+	coll[eventPattern] = &EventSubscription{
 		Acked:    false,
-		Event:    event,
+		Event:    eventPattern,
 		Handlers: []EventHandler{handler},
 	}
 
-	action := &SubscribeToEventAction{
-		Event: event,
-	}
 	return e.client.Connector.WriteMessage([]byte(action.ToAction()))
 }
 
@@ -74,6 +103,14 @@ func (e *EventManager) Unsubscribe(event string) error {
 }
 
 func (e *EventManager) handleEventSubscriptionAck(msg *Message) error {
+	return e.handleListenAck(e.Subscriptions, msg)
+}
+
+func (e *EventManager) handleEventListenerAck(msg *Message) error {
+	return e.handleListenAck(e.Listeners, msg)
+}
+
+func (e *EventManager) handleListenAck(coll map[string]*EventSubscription, msg *Message) error {
 	if len(msg.Data)%2 != 0 {
 		return fmt.Errorf("Invalid data returned for event acknowledge: %v", msg.Data)
 	}
@@ -82,14 +119,14 @@ func (e *EventManager) handleEventSubscriptionAck(msg *Message) error {
 		flag := msg.Data[0]
 		event := msg.Data[1]
 
-		if flag != "S" {
-			return fmt.Errorf("Invalid subscription acknowledge for event subscription: %s", flag)
+		if flag != "S" && flag != "L" {
+			return fmt.Errorf("Invalid subscription/listen acknowledge for event subscription/listen: %s", flag)
 		}
 
-		if sub, ok := e.Subscriptions[event]; ok {
+		if sub, ok := coll[event]; ok {
 			sub.Acked = true
 		} else {
-			return fmt.Errorf("Received subscription confirmation for unknown subscription: %s", event)
+			return fmt.Errorf("Received subscription/listen confirmation for unknown subscription/listener: %s", event)
 		}
 	}
 	return nil

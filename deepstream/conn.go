@@ -68,13 +68,14 @@ func New(url string, optionsOrNil ...*ClientOptions) (*Client, error) {
 			"password": password,
 		}
 	}
-	conn := NewConnector(url, options.ConnectionTimeoutMs, options.WriteTimeoutMs, options.ReadTimeoutMs)
+	conn := NewConnector(url, options.ConnectionTimeoutMs, options.WriteTimeoutMs, options.ReadTimeoutMs, nil)
 	cli := &Client{
 		Connector:      conn,
 		Options:        options,
 		AuthParams:     authParams,
 		loginRequested: false,
 	}
+	cli.Connector.CloseHandler = cli.OnClose
 	cli.Event = NewEventManager(cli)
 
 	cli.Connector.AddMessageHandler(cli.onMessage)
@@ -85,6 +86,21 @@ func New(url string, optionsOrNil ...*ClientOptions) (*Client, error) {
 	}
 
 	return cli, nil
+}
+
+//OnClose connection
+func (c *Client) OnClose(reason string) error {
+	c.Close()
+	err := fmt.Errorf("Can't connect! Deepstream server unreachable on ws://%s/deepstream", c.Connector.URL)
+	c.onError(err)
+	if c.Options.AutoReconnect {
+		c.Connector.ConnectionState = interfaces.ConnectionStateReconnecting
+		for iErr := c.startMonitoringConnection(); iErr != nil; {
+			fmt.Println("ERROR RECONN", iErr.Error())
+			time.Sleep(10 * time.Millisecond)
+		}
+	}
+	return err
 }
 
 func (c *Client) startMonitoringConnection() error {
@@ -215,8 +231,6 @@ func (c *Client) Login() error {
 		return fmt.Errorf("The connection should be restored before logging in (%s).", state)
 	}
 
-	c.loginRequested = false
-
 	authRequestAction, err := NewAuthRequestAction(c.AuthParams)
 	if err != nil {
 		return err
@@ -270,11 +284,15 @@ func (c *Client) handleAuthenticationError(msg *Message) error {
 func (c *Client) handleEventMessages(msg *Message) error {
 	switch {
 	case msg.Action == "A":
-		if msg.Data[0] == "S" {
+		switch msg.Data[0] {
+		case "S":
 			return c.Event.handleEventSubscriptionAck(msg)
-		}
-		if msg.Data[0] == "US" {
+		case "US":
 			return c.Event.handleEventUnsubscriptionAck(msg)
+		case "L":
+			return c.Event.handleEventListenerAck(msg)
+		default:
+			fmt.Printf("Message not understood (%s %s %s)!\n", msg.Topic, msg.Action, strings.Join(msg.Data, ", "))
 		}
 	case msg.Action == "EVT":
 		return c.Event.handleEventMessageReceived(msg)

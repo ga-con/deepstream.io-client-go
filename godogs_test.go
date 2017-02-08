@@ -9,7 +9,7 @@ import (
 
 var client *deepstream.Client
 
-const defaultPort = 9999
+const defaultPort = 7777
 
 func beforeScenario(interface{}) {
 	receivedEvents = []*deepstream.EventMessage{}
@@ -46,19 +46,11 @@ func theLastMessageTheServerRecievedIsEStest(arg1 int) error {
 	return godog.ErrPending
 }
 
-func theClientListensToEventsMatching(arg1 string) error {
-	return godog.ErrPending
-}
-
 func theLastMessageTheServerRecievedIsELeventPrefix() error {
 	return godog.ErrPending
 }
 
 func theServerSendsTheMessageEALeventPrefix() error {
-	return godog.ErrPending
-}
-
-func theConnectionToTheServerIsLost() error {
 	return godog.ErrPending
 }
 
@@ -709,6 +701,7 @@ func FeatureContext(s *godog.Suite) {
 	s.Step(`^the test server is ready$`, theTestServerIsReady)
 	s.Step(`^the server has (\d+) active connections$`, theServerHasActiveConnections)
 	s.Step(`^the client is initialised$`, theClientIsInitialised)
+	s.Step(`^the clients connection state is "RECONNECTING"$`, reconnectServerAndCheckState)
 	s.Step(`^the clients connection state is "([^"]*)"$`, theClientsConnectionStateIs)
 	s.Step(`^the client is initialised with a small heartbeat interval$`, theClientIsInitialisedWithASmallHeartbeatInterval)
 	s.Step(`^the server sends the message C\|A\+$`, theServerSendsTheMessage("C", "A"))
@@ -721,10 +714,10 @@ func FeatureContext(s *godog.Suite) {
 	s.Step(`^the second test server is ready$`, theSecondTestServerIsReady)
 	s.Step(`^the second server has (\d+) active connections$`, theSecondServerHasActiveConnections)
 	s.Step(`^the server sends the message C\|CH\+$`, theServerSendsTheMessage("C", "CH"))
-	s.Step(`^the last message the server recieved is C\|CHR\|<FIRST_SERVER_URL>\+$`, theServerReceivedTheMessage("C", "CHR", "127.0.0.1:9999"))
+	s.Step(`^the last message the server recieved is C\|CHR\|<FIRST_SERVER_URL>\+$`, theServerReceivedTheMessage("C", "CHR", "localhost:9999"))
 	s.Step(`^the server sends the message C\|REJ\+$`, theServerSendsTheMessage("C", "REJ"))
 	s.Step(`^the server has received (\d+) messages$`, theServerHasReceivedMessages)
-	s.Step(`^the server sends the message C\|RED\|<SECOND_SERVER_URL>\+$`, theServerSendsTheMessage("C", "RED", "127.0.0.1:9998"))
+	s.Step(`^the server sends the message C\|RED\|<SECOND_SERVER_URL>\+$`, theServerSendsTheMessage("C", "RED", "localhost:9998"))
 	s.Step(`^some time passes$`, someMsLater(100))
 	s.Step(`^the client is on the second server$`, theClientIsOnTheSecondServer)
 	s.Step(`^the last message the server recieved is A\|REQ\|{"([^"]*)":"XXX","([^"]*)":"YYY"}\+$`, theServerReceivedTheMessage("A", "REQ", `{"username":"XXX","password":"YYY"}`))
@@ -737,8 +730,8 @@ func FeatureContext(s *godog.Suite) {
 	s.Step(`^the server sends the message E\|A\|S\|test(\d+)\+$`, theServerSendsTheMessage("E", "A", "S", "test1"))
 	s.Step(`^the server received the message E\|S\|test(\d+)\+$`, theServerReceivedTheMessage("E", "S", "test1"))
 	s.Step(`^the last message the server recieved is E\|S\|test(\d+)\+$`, theServerReceivedTheMessage("E", "S", "test1"))
-	s.Step(`^the client listens to events matching "([^"]*)"$`, theClientListensToEventsMatching)
-	s.Step(`^the last message the server recieved is E\|L\|eventPrefix\/\.\*\+$`, theLastMessageTheServerRecievedIsELeventPrefix)
+	s.Step(`^the client listens to events matching "([^"]*)"$`, theClientListensToEvents)
+	s.Step(`^the last message the server recieved is E\|L\|eventPrefix\/\.\*\+$`, theServerReceivedTheMessage("E", "L", "eventPrefix/.*"))
 	s.Step(`^the server sends the message E\|A\|L\|eventPrefix\/\.\*\+$`, theServerSendsTheMessage("E", "A", "L", "eventPrefix"))
 	s.Step(`^the connection to the server is lost$`, theConnectionToTheServerIsLost)
 	s.Step(`^the client publishes an event named "([^"]*)" with data "([^"]*)"$`, theClientPublishesAnEvent)
