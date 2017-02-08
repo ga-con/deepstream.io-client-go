@@ -8,6 +8,9 @@ import (
 	"github.com/heynemann/deepstream.io-client-go/deepstream"
 )
 
+var receivedEvents []*deepstream.EventMessage
+var receivedErrors []error
+
 func handleClientErrors(err error) {
 	receivedErrors = append(receivedErrors, err)
 }
@@ -108,10 +111,40 @@ func theLastLoginWasSuccessful() error {
 	return nil
 }
 
-func handleEventReceived() {
-
+func handleEventReceived(msg *deepstream.EventMessage) error {
+	receivedEvents = append(receivedEvents, msg)
+	return nil
 }
 
 func theClientSubscribesToAnEventNamed(eventName string) error {
-	return client.Event.Subscribe(eventName, handleEventReceived)
+	err := client.Event.Subscribe(eventName, handleEventReceived)
+	time.Sleep(10 * time.Millisecond)
+	return err
+}
+
+func theClientUnsubscribesFromAnEventNamed(eventName string) error {
+	err := client.Event.Unsubscribe(eventName)
+	time.Sleep(10 * time.Millisecond)
+	return err
+}
+
+func theClientReceivedEvent(eventName, eventData string) error {
+	for _, msg := range receivedEvents {
+		if msg.Event == eventName && msg.Data[0] == eventData {
+			return nil
+		}
+	}
+
+	return fmt.Errorf(
+		"None of the received events (%s) match the event %s with data %s.",
+		receivedEvents,
+		eventName,
+		eventData,
+	)
+}
+
+func theClientPublishesAnEvent(eventName, eventData string) error {
+	err := client.Event.Publish(eventName, eventData)
+	time.Sleep(10 * time.Millisecond)
+	return err
 }

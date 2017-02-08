@@ -9,6 +9,7 @@ package deepstream
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/heynemann/deepstream.io-client-go/interfaces"
@@ -269,11 +270,16 @@ func (c *Client) handleAuthenticationError(msg *Message) error {
 func (c *Client) handleEventMessages(msg *Message) error {
 	switch {
 	case msg.Action == "A":
-		return c.Event.handleEventSubscriptionAck(msg)
+		if msg.Data[0] == "S" {
+			return c.Event.handleEventSubscriptionAck(msg)
+		}
+		if msg.Data[0] == "US" {
+			return c.Event.handleEventUnsubscriptionAck(msg)
+		}
 	case msg.Action == "EVT":
 		return c.Event.handleEventMessageReceived(msg)
 	default:
-		fmt.Println("Message not understood!")
+		fmt.Printf("Message not understood (%s %s %s)!\n", msg.Topic, msg.Action, strings.Join(msg.Data, ", "))
 	}
 
 	return nil

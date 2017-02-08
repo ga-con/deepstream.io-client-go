@@ -61,6 +61,18 @@ func (e *EventManager) Subscribe(event string, handler EventHandler) error {
 	return e.client.Connector.WriteMessage([]byte(action.ToAction()))
 }
 
+//Unsubscribe to an event previously subscribed
+func (e *EventManager) Unsubscribe(event string) error {
+	if _, ok := e.Subscriptions[event]; !ok {
+		return nil
+	}
+
+	action := &UnsubscribeFromEventAction{
+		Event: event,
+	}
+	return e.client.Connector.WriteMessage([]byte(action.ToAction()))
+}
+
 func (e *EventManager) handleEventSubscriptionAck(msg *Message) error {
 	if len(msg.Data)%2 != 0 {
 		return fmt.Errorf("Invalid data returned for event acknowledge: %v", msg.Data)
@@ -83,18 +95,13 @@ func (e *EventManager) handleEventSubscriptionAck(msg *Message) error {
 	return nil
 }
 
-//Publish an event to deepstream.io
-func (e *EventManager) Publish(event string, data ...interface{}) error {
-	action := &PublishEventAction{
-		Event: event,
-		Data:  data,
+func (e *EventManager) handleEventUnsubscriptionAck(msg *Message) error {
+	event := msg.Data[1]
+	if _, ok := e.Subscriptions[event]; !ok {
+		return nil
 	}
-
-	actionData, err := action.ToAction()
-	if err != nil {
-		return err
-	}
-	return e.client.Connector.WriteMessage([]byte(actionData))
+	delete(e.Subscriptions, event)
+	return nil
 }
 
 func (e *EventManager) handleEventMessageReceived(msg *Message) error {
@@ -132,4 +139,18 @@ func (e *EventManager) handleEventMessageReceived(msg *Message) error {
 	}
 
 	return nil
+}
+
+//Publish an event to deepstream.io
+func (e *EventManager) Publish(event string, data ...interface{}) error {
+	action := &PublishEventAction{
+		Event: event,
+		Data:  data,
+	}
+
+	actionData, err := action.ToAction()
+	if err != nil {
+		return err
+	}
+	return e.client.Connector.WriteMessage([]byte(actionData))
 }

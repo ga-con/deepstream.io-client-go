@@ -77,6 +77,22 @@ func (a *SubscribeToEventAction) ToAction() string {
 	)
 }
 
+//UnsubscribeFromEventAction sends a message to deepstream to unsubscribe to a given event
+type UnsubscribeFromEventAction struct {
+	Event string
+}
+
+//ToAction converts to the action to be sent to the server
+func (a *UnsubscribeFromEventAction) ToAction() string {
+	return fmt.Sprintf(
+		"E%sUS%s%s%s",
+		interfaces.MessagePartSeparator,
+		interfaces.MessagePartSeparator,
+		a.Event,
+		interfaces.MessageSeparator,
+	)
+}
+
 //PublishEventAction sends a message to deepstream to publish an event
 type PublishEventAction struct {
 	Event string

@@ -8,13 +8,15 @@ import (
 )
 
 var client *deepstream.Client
-var receivedErrors []error
 
 const defaultPort = 9999
 
-func afterScenario(interface{}, error) {
+func beforeScenario(interface{}) {
+	receivedEvents = []*deepstream.EventMessage{}
 	receivedErrors = []error{}
+}
 
+func afterScenario(interface{}, error) {
 	if client != nil {
 		client.Close()
 		client = nil
@@ -29,10 +31,6 @@ func afterScenario(interface{}, error) {
 }
 
 func theServerResetsItsMessageCount() error {
-	return godog.ErrPending
-}
-
-func theClientSubscribesToAnEventNamed(arg1 string) error {
 	return godog.ErrPending
 }
 
@@ -109,10 +107,6 @@ func theClientWillBeNotifiedOfEventMatchRemoval(arg1 string) error {
 }
 
 func theServerSendsTheMessageEAULeventPrefix() error {
-	return godog.ErrPending
-}
-
-func theClientUnsubscribesFromAnEventNamed(arg1 string) error {
 	return godog.ErrPending
 }
 
@@ -709,6 +703,7 @@ func theClientRecievesAnErrorRPCCallbackForWithTheMessage(arg1, arg2 string) err
 }
 
 func FeatureContext(s *godog.Suite) {
+	s.BeforeScenario(beforeScenario)
 	s.AfterScenario(afterScenario)
 
 	s.Step(`^the test server is ready$`, theTestServerIsReady)
@@ -739,31 +734,31 @@ func FeatureContext(s *godog.Suite) {
 	s.Step(`^the server sends the message A\|E\|TOO_MANY_AUTH_ATTEMPTS\|Stoo many authentication attempts\+$`, theServerSendsTheMessage("A", "E", "TOO_MANY_AUTH_ATTEMPTS", "Stoo many authentication attempts"))
 	s.Step(`^the server resets its message count$`, theServerResetsItsMessageCount)
 	s.Step(`^the client subscribes to an event named "([^"]*)"$`, theClientSubscribesToAnEventNamed)
-	s.Step(`^the server sends the message E\|A\|S\|test(\d+)\+$`, theServerSendsTheMessageEAStest)
-	s.Step(`^the server received the message E\|S\|test(\d+)\+$`, theServerReceivedTheMessageEStest)
-	s.Step(`^the last message the server recieved is E\|S\|test(\d+)\+$`, theLastMessageTheServerRecievedIsEStest)
+	s.Step(`^the server sends the message E\|A\|S\|test(\d+)\+$`, theServerSendsTheMessage("E", "A", "S", "test1"))
+	s.Step(`^the server received the message E\|S\|test(\d+)\+$`, theServerReceivedTheMessage("E", "S", "test1"))
+	s.Step(`^the last message the server recieved is E\|S\|test(\d+)\+$`, theServerReceivedTheMessage("E", "S", "test1"))
 	s.Step(`^the client listens to events matching "([^"]*)"$`, theClientListensToEventsMatching)
 	s.Step(`^the last message the server recieved is E\|L\|eventPrefix\/\.\*\+$`, theLastMessageTheServerRecievedIsELeventPrefix)
-	s.Step(`^the server sends the message E\|A\|L\|eventPrefix\/\.\*\+$`, theServerSendsTheMessageEALeventPrefix)
+	s.Step(`^the server sends the message E\|A\|L\|eventPrefix\/\.\*\+$`, theServerSendsTheMessage("E", "A", "L", "eventPrefix"))
 	s.Step(`^the connection to the server is lost$`, theConnectionToTheServerIsLost)
-	s.Step(`^the client publishes an event named "([^"]*)" with data "([^"]*)"$`, theClientPublishesAnEventNamedWithData)
+	s.Step(`^the client publishes an event named "([^"]*)" with data "([^"]*)"$`, theClientPublishesAnEvent)
 	s.Step(`^the server did not recieve any messages$`, theServerDidNotRecieveAnyMessages)
 	s.Step(`^the connection to the server is reestablished$`, theConnectionToTheServerIsReestablished)
 	s.Step(`^the server received the message E\|L\|eventPrefix\/\.\*\+$`, theServerReceivedTheMessageELeventPrefix)
-	s.Step(`^the server received the message E\|EVT\|test(\d+)\|SyetAnotherValue\+$`, theServerReceivedTheMessageEEVTtestSyetAnotherValue)
+	s.Step(`^the server received the message E\|EVT\|test(\d+)\|SyetAnotherValue\+$`, theServerReceivedTheMessage("E", "EVT", "test1", "SyetAnotherValue"))
 	s.Step(`^the client unlistens to events matching "([^"]*)"$`, theClientUnlistensToEventsMatching)
 	s.Step(`^the last message the server recieved is E\|UL\|eventPrefix\/\.\*\+$`, theLastMessageTheServerRecievedIsEULeventPrefix)
-	s.Step(`^the server sends the message E\|SP\|eventPrefix\/\.\*\|eventPrefix\/foundAMatch\+$`, theServerSendsTheMessageESPeventPrefixeventPrefixfoundAMatch)
+	s.Step(`^the server sends the message E\|SP\|eventPrefix\/\.\*\|eventPrefix\/foundAMatch\+$`, theServerSendsTheMessage("E", "SP", "eventPrefix", "eventPrefix/foundAMatch"))
 	s.Step(`^the client will be notified of new event match "([^"]*)"$`, theClientWillBeNotifiedOfNewEventMatch)
-	s.Step(`^the server sends the message E\|SR\|eventPrefix\/\.\*\|eventPrefix\/foundAMatch\+$`, theServerSendsTheMessageESReventPrefixeventPrefixfoundAMatch)
+	s.Step(`^the server sends the message E\|SR\|eventPrefix\/\.\*\|eventPrefix\/foundAMatch\+$`, theServerSendsTheMessage("E", "SR", "eventPrefix", "eventPrefix/foundMatch"))
 	s.Step(`^the client will be notified of event match removal "([^"]*)"$`, theClientWillBeNotifiedOfEventMatchRemoval)
 	s.Step(`^the server sends the message E\|A\|UL\|eventPrefix\/\.\*\+$`, theServerSendsTheMessageEAULeventPrefix)
 	s.Step(`^the client unsubscribes from an event named "([^"]*)"$`, theClientUnsubscribesFromAnEventNamed)
-	s.Step(`^the server received the message E\|US\|test(\d+)\+$`, theServerReceivedTheMessageEUStest)
-	s.Step(`^the server sends the message E\|EVT\|test(\d+)\|SsomeValue\+$`, theServerSendsTheMessageEEVTtestSsomeValue)
-	s.Step(`^the client received the event "([^"]*)" with data "([^"]*)"$`, theClientReceivedTheEventWithData)
-	s.Step(`^the server sends the message E\|EVT\|test(\d+)\|SanotherValue\+$`, theServerSendsTheMessageEEVTtestSanotherValue)
-	s.Step(`^the server sends the message E\|A\|US\|test(\d+)\+$`, theServerSendsTheMessageEAUStest)
+	s.Step(`^the server received the message E\|US\|test(\d+)\+$`, theServerReceivedTheMessage("E", "US", "test1"))
+	s.Step(`^the server sends the message E\|EVT\|test(\d+)\|SsomeValue\+$`, theServerSendsTheMessage("E", "EVT", "test1", "SsomeValue"))
+	s.Step(`^the client received the event "([^"]*)" with data "([^"]*)"$`, theClientReceivedEvent)
+	s.Step(`^the server sends the message E\|EVT\|test(\d+)\|SanotherValue\+$`, theServerSendsTheMessage("E", "EVT", "test1", "SanotherValue"))
+	s.Step(`^the server sends the message E\|A\|US\|test(\d+)\+$`, theServerSendsTheMessage("E", "A", "US", "test1"))
 	s.Step(`^the server sends the message I only have one part\+$`, theServerSendsTheMessageIOnlyHaveOnePart)
 	s.Step(`^the server sends the message B\|R\+$`, theServerSendsTheMessageBR)
 	s.Step(`^the server sends the message R\|XXX\+$`, theServerSendsTheMessageRXXX)
