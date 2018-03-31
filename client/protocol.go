@@ -1,5 +1,5 @@
 // deepstream.io-client-go
-// https://github.com/heynemann/deepstream.io-client-go
+// https://github.com/ga-con/deepstream.io-client-go
 //
 // Licensed under the MIT license:
 // http://www.opensource.org/licenses/mit-license
@@ -11,8 +11,8 @@ import (
 	"fmt"
 
 	"github.com/gorilla/websocket"
-	"github.com/heynemann/deepstream.io-client-go/interfaces"
-	"github.com/heynemann/deepstream.io-client-go/message"
+	"github.com/ga-con/deepstream.io-client-go/interfaces"
+	"github.com/ga-con/deepstream.io-client-go/message"
 )
 
 //WebsocketProtocol is the default protocol for deepstream.io

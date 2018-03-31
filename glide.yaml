@@ -1,4 +1,4 @@
-package: github.com/heynemann/deepstream.io-client-go
+package: github.com/ga-con/deepstream.io-client-go
 import:
 - package: github.com/onsi/gomega
   version: ^1.0.0

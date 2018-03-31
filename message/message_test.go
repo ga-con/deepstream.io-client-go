@@ -1,5 +1,5 @@
 // deepstream.io-client-go
-// https://github.com/heynemann/deepstream.io-client-go
+// https://github.com/ga-con/deepstream.io-client-go
 //
 // Licensed under the MIT license:
 // http://www.opensource.org/licenses/mit-license
@@ -11,8 +11,8 @@ import (
 	"bytes"
 	"fmt"
 
-	"github.com/heynemann/deepstream.io-client-go/errors"
-	"github.com/heynemann/deepstream.io-client-go/message"
+	"github.com/ga-con/deepstream.io-client-go/errors"
+	"github.com/ga-con/deepstream.io-client-go/message"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 )

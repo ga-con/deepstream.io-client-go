@@ -1,5 +1,5 @@
 // deepstream.io-client-go
-// https://github.com/heynemann/deepstream.io-client-go
+// https://github.com/ga-con/deepstream.io-client-go
 //
 // Licensed under the MIT license:
 // http://www.opensource.org/licenses/mit-license
@@ -9,8 +9,8 @@ package message
 
 import (
 	"fmt"
-
-	"github.com/heynemann/deepstream.io-client-go/interfaces"
+	"github.com/ga-con/deepstream.io-client-go/interfaces"
+	"strings"
 )
 
 //ChallengeAction represents a challenge action coming from the server
@@ -88,5 +88,146 @@ func (a *AuthRequestAction) ToAction() string {
 		interfaces.MessagePartSeparator,
 		a.AuthParams,
 		interfaces.MessageSeparator,
+	)
+}
+
+type CreateOrReadAction struct {
+	Message
+}
+
+func NewCreateOrReadAction(msg *Message) (*CreateOrReadAction, error) {
+	return &CreateOrReadAction{*msg}, nil
+}
+
+func (a *CreateOrReadAction) ToAction() string {
+	return fmt.Sprintf(
+		"R%sCR%s%s%s",
+		interfaces.MessagePartSeparator,
+		interfaces.MessagePartSeparator,
+		a.RawData[0],
+		interfaces.MessageSeparator,
+	)
+}
+
+type UpdateAction struct {
+	Message
+}
+
+func NewUpdateAction(msg *Message) (*UpdateAction, error) {
+	return &UpdateAction{*msg}, nil
+}
+
+// 	When the server sends the message R|U|subscribeRecord|125|{"name":"Smith","pets":[{"name":"Ruffus","type":"dog","age":1}]}+
+func (a *UpdateAction) ToAction() string {
+	return fmt.Sprintf(
+		"R%sU%s%s%s",
+		interfaces.MessagePartSeparator,
+		interfaces.MessagePartSeparator,
+		strings.Join(a.RawData, interfaces.MessagePartSeparator),
+		interfaces.MessageSeparator,
+	)
+}
+
+type PathAction struct {
+	Message
+}
+
+func NewPathAction(msg *Message) (*PathAction, error) {
+	return &PathAction{*msg}, nil
+}
+
+func (a *PathAction) ToAction() string {
+	return fmt.Sprintf(
+		"R%sP%s%s%s",
+		interfaces.MessagePartSeparator,
+		interfaces.MessagePartSeparator,
+		strings.Join(a.RawData, interfaces.MessagePartSeparator),
+		interfaces.MessageSeparator,
+	)
+}
+
+type ReadAction struct {
+	Message
+}
+
+func NewReadAction(msg *Message) (*ReadAction, error) {
+	return &ReadAction{*msg}, nil
+}
+
+func (a *ReadAction) ToAction() string {
+	return fmt.Sprintf(
+		"R%sR%s%s%s",
+		interfaces.MessagePartSeparator,
+		interfaces.MessagePartSeparator,
+		strings.Join(a.RawData, interfaces.MessagePartSeparator),
+		interfaces.MessageSeparator,
+	)
+}
+
+type EventAction struct {
+	Message
+}
+
+func NewEventAction(msg *Message) (*EventAction, error) {
+	return &EventAction{*msg}, nil
+}
+
+//  E|EVT|test1|SyetAnotherValue+
+func (a *EventAction) ToAction() string {
+	return fmt.Sprintf(
+		"E%sEVT%s%s%s",
+		interfaces.MessagePartSeparator,
+		interfaces.MessagePartSeparator,
+		strings.Join(a.RawData, interfaces.MessagePartSeparator),
+		interfaces.MessageSeparator,
+	)
+}
+
+// E|S|test1+
+type SubscribeAction struct {
+	Message
+}
+
+func NewSubscribeAction(msg *Message) (*SubscribeAction, error) {
+	return &SubscribeAction{*msg}, nil
+}
+
+func (a *SubscribeAction) ToAction() string {
+	return fmt.Sprintf(
+		"E%sS%s%s%s",
+		interfaces.MessagePartSeparator,
+		interfaces.MessagePartSeparator,
+		strings.Join(a.RawData, interfaces.MessagePartSeparator),
+		interfaces.MessageSeparator,
+	)
+}
+
+type PingAction struct {
+	Message
+}
+
+func NewPingAction(msg *Message) (*PingAction, error) {
+	return &PingAction{*msg}, nil
+}
+
+func (a *PingAction) ToAction() string {
+	return fmt.Sprintf(
+		"C%sPI",
+		interfaces.MessagePartSeparator,
+	)
+}
+
+type PongAction struct {
+	Message
+}
+
+func NewPongAction(msg *Message) (*PongAction, error) {
+	return &PongAction{*msg}, nil
+}
+
+func (a *PongAction) ToAction() string {
+	return fmt.Sprintf(
+		"C%sPO",
+		interfaces.MessagePartSeparator,
 	)
 }

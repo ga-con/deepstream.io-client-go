@@ -1,5 +1,5 @@
 // deepstream.io-client-go
-// https://github.com/heynemann/deepstream.io-client-go
+// https://github.com/ga-con/deepstream.io-client-go
 //
 // Licensed under the MIT license:
 // http://www.opensource.org/licenses/mit-license
@@ -10,15 +10,23 @@ package message
 import (
 	"strings"
 
-	"github.com/heynemann/deepstream.io-client-go/errors"
-	"github.com/heynemann/deepstream.io-client-go/interfaces"
+	"github.com/ga-con/deepstream.io-client-go/errors"
+	"github.com/ga-con/deepstream.io-client-go/interfaces"
 )
 
 var (
 	//AvailableMessageTypes returns all the available message types
 	AvailableMessageTypes = map[string]func(*Message) (interfaces.Action, error){
-		interfaces.ActionChallenge: func(msg *Message) (interfaces.Action, error) { return NewChallengeAction(msg) },
-		interfaces.ActionAck:       func(msg *Message) (interfaces.Action, error) { return NewAckAction(msg) },
+		interfaces.ActionChallenge:    func(msg *Message) (interfaces.Action, error) { return NewChallengeAction(msg) },
+		interfaces.ActionAck:          func(msg *Message) (interfaces.Action, error) { return NewAckAction(msg) },
+		interfaces.ActionCreateOrRead: func(msg *Message) (interfaces.Action, error) { return NewCreateOrReadAction(msg) },
+		interfaces.ActionUpdate:       func(msg *Message) (interfaces.Action, error) { return NewUpdateAction(msg) },
+		interfaces.ActionPatch:        func(msg *Message) (interfaces.Action, error) { return NewPathAction(msg) },
+		interfaces.ActionRead:         func(msg *Message) (interfaces.Action, error) { return NewReadAction(msg) },
+		interfaces.ActionEvent:        func(msg *Message) (interfaces.Action, error) { return NewEventAction(msg) },
+		interfaces.ActionSubscribe:    func(msg *Message) (interfaces.Action, error) { return NewSubscribeAction(msg) },
+		interfaces.ActionPing:         func(msg *Message) (interfaces.Action, error) { return NewPingAction(msg) },
+		interfaces.ActionPong:         func(msg *Message) (interfaces.Action, error) { return NewPongAction(msg) },
 	}
 )
 

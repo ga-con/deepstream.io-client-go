@@ -1,5 +1,5 @@
 // deepstream.io-client-go
-// https://github.com/heynemann/deepstream.io-client-go
+// https://github.com/ga-con/deepstream.io-client-go
 //
 // Licensed under the MIT license:
 // http://www.opensource.org/licenses/mit-license
@@ -10,9 +10,9 @@ package client_test
 import (
 	"fmt"
 
-	"github.com/heynemann/deepstream.io-client-go/client"
-	"github.com/heynemann/deepstream.io-client-go/interfaces"
-	"github.com/heynemann/deepstream.io-client-go/testing"
+	"github.com/ga-con/deepstream.io-client-go/client"
+	"github.com/ga-con/deepstream.io-client-go/interfaces"
+	"github.com/ga-con/deepstream.io-client-go/testing"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 )

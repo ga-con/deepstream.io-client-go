@@ -1,5 +1,5 @@
 // deepstream.io-client-go
-// https://github.com/heynemann/deepstream.io-client-go
+// https://github.com/ga-con/deepstream.io-client-go
 //
 // Licensed under the MIT license:
 // http://www.opensource.org/licenses/mit-license
@@ -186,6 +186,8 @@ const ActionError = "E"
 const ActionRequest = "REQ"
 const ActionResponse = "RES"
 const ActionRejection = "REJ"
+const ActionPing = "PI"
+const ActionPong = "PO"
 
 //Data Types
 

@@ -1,5 +1,5 @@
 // deepstream.io-client-go
-// https://github.com/heynemann/deepstream.io-client-go
+// https://github.com/ga-con/deepstream.io-client-go
 //
 // Licensed under the MIT license:
 // http://www.opensource.org/licenses/mit-license
@@ -7,7 +7,7 @@
 
 package testing
 
-import "github.com/heynemann/deepstream.io-client-go/interfaces"
+import "github.com/ga-con/deepstream.io-client-go/interfaces"
 
 //MockProtocol should be used for unit tests
 type MockProtocol struct {
