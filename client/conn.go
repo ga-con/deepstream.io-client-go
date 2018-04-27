@@ -112,7 +112,6 @@ func (cli *Client) connect() {
 		cli.mu.Lock()
 		cli.Conn = wsConn
 		cli.dialErr = err
-		cli.isConnected = err == nil
 		cli.mu.Unlock()
 
 		if err == nil {
@@ -143,6 +142,8 @@ func (cli *Client) connect() {
 				"password": cli.Options.AuthUser.Password}
 			if err := cli.Login(param); err != nil {
 				log.Println(err)
+			}else{
+				cli.isConnected = true
 			}
 
 			break
