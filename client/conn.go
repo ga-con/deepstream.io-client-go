@@ -10,76 +10,148 @@ package client
 import (
 	"encoding/json"
 	"fmt"
+	"time"
+	"sync"
 	"github.com/gorilla/websocket"
 	"github.com/ga-con/deepstream.io-client-go/interfaces"
 	"github.com/ga-con/deepstream.io-client-go/message"
+	"github.com/jpillora/backoff"
+	"math/rand"
+	"log"
 )
+
+type AuthUser struct {
+	Username string
+	Password string
+}
+
+// ClientOption is a function on the options for a connection.
+type ClientOption func(*ClientOptions) error
+
+type ClientOptions struct {
+	// RecIntvlMin specifies the initial reconnecting interval,
+	// default to 2 seconds
+	RecIntvlMin time.Duration
+	// RecIntvlMax specifies the maximum reconnecting interval,
+	// default to 30 seconds
+	RecIntvlMax time.Duration
+	// RecIntvlFactor specifies the rate of increase of the reconnection
+	// interval, default to 1.5
+	RecIntvlFactor float64
+	// HandshakeTimeout specifies the duration for the handshake to complete,
+	// default to 2 seconds
+	HandshakeTimeout time.Duration
+
+	AuthUser AuthUser
+}
+
+// GetDefaultOptions returns default configuration options for the client.
+func GetDefaultOptions() ClientOptions {
+	return ClientOptions{
+		RecIntvlMin:      2 * time.Second,
+		RecIntvlMax:      30 * time.Second,
+		RecIntvlFactor:   1.5,
+		HandshakeTimeout: 2 * time.Second,
+	}
+}
 
 //Client represents a connection to a deepstream.io server
 type Client struct {
-	URL string
-	//Protocol        interfaces.Protocol
-	Conn            *websocket.Conn
+	Options         ClientOptions
+	URL             string
 	ConnectionState interfaces.ConnectionState
+	mu              sync.Mutex
+	dialErr         error
+	isConnected     bool
+	dialer          *websocket.Dialer
+	*websocket.Conn
 }
 
-//New creates a new client
-func New(url string, protocolOrNil ...interfaces.Protocol) (*Client, error) {
-	/*var proto interfaces.Protocol
-	if len(protocolOrNil) == 1 {
-		proto = protocolOrNil[0]
-	}*/
-	/*if proto == nil {
-		var err error
-		proto, err = NewWebsocketProtocol(url)
-		if err != nil {
+//Dial creates a new client connection.
+func Dial(url string, options ...ClientOption) (*Client, error) {
+	opts := GetDefaultOptions()
+	for _, opt := range options {
+		if err := opt(&opts); err != nil {
 			return nil, err
 		}
-	}*/
-	cli := &Client{
-		URL:             url,
-		ConnectionState: interfaces.ConnectionStateClosed,
-		Conn:            &websocket.Conn{},
-		//Protocol:        proto,
 	}
 
-	err := cli.Connect()
-	if err != nil {
-		return cli, err
+	cli := &Client{
+		URL:             fmt.Sprintf("ws://%s/deepstream", url),
+		ConnectionState: interfaces.ConnectionStateClosed,
+		dialer:          websocket.DefaultDialer,
+		Options:         opts,
 	}
+	cli.dialer.HandshakeTimeout = cli.Options.HandshakeTimeout
+
+	go func() {
+		cli.connect()
+	}()
+
+	// wait on first attempt
+	time.Sleep(cli.Options.HandshakeTimeout)
 
 	return cli, nil
 }
 
-//Connect with deepstream.io server
-func (c *Client) Connect() error {
-	c.ConnectionState = interfaces.ConnectionStateAwaitingConnection
-
-	url := fmt.Sprintf("ws://%s/deepstream", c.URL)
-	conn, _, err := websocket.DefaultDialer.Dial(url, nil)
-	if err != nil {
-		return err
+func (cli *Client) connect() {
+	b := &backoff.Backoff{
+		Min:    cli.Options.RecIntvlMin,
+		Max:    cli.Options.RecIntvlMax,
+		Factor: cli.Options.RecIntvlFactor,
+		Jitter: true,
 	}
 
-	c.Conn = conn
+	rand.Seed(time.Now().UTC().UnixNano())
 
-	err = c.getAuthChallenge()
-	if err != nil {
-		return err
+	for {
+		nextItvl := b.Duration()
+
+		wsConn, _, err := cli.dialer.Dial(cli.URL, nil)
+
+		cli.mu.Lock()
+		cli.Conn = wsConn
+		cli.dialErr = err
+		cli.isConnected = err == nil
+		cli.mu.Unlock()
+
+		if err == nil {
+			log.Printf("Dial: connection was successfully established with %s\n", cli.URL)
+
+			err = cli.getAuthChallenge()
+			if err != nil {
+				fmt.Println(err)
+				return
+			}
+
+			//Send Challenge Response
+			err = cli.sendChallengeResponse()
+			if err != nil {
+				fmt.Println(err)
+
+				return
+			}
+
+			err = cli.receiveAck("C")
+			if err != nil {
+				fmt.Println(err)
+
+				return
+			}
+
+			param := map[string]interface{}{"username": cli.Options.AuthUser.Username,
+				"password": cli.Options.AuthUser.Password}
+			if err := cli.Login(param); err != nil {
+				log.Println(err)
+			}
+
+			break
+		} else {
+			log.Println("Dial: will try again in", nextItvl, "seconds.", " Error:", err)
+		}
+
+		time.Sleep(nextItvl)
 	}
-
-	//Send Challenge Response
-	err = c.sendChallengeResponse()
-	if err != nil {
-		return c.Error(err)
-	}
-
-	err = c.receiveAck("C")
-	if err != nil {
-		return c.Error(err)
-	}
-
-	return nil
 }
 
 func (c *Client) sendChallengeResponse() error {
@@ -108,25 +180,19 @@ func (c *Client) receiveAck(expectedTopic string) error {
 }
 
 //Close connection to deepstream.io server
-func (c *Client) Close() error {
+// Close closes the underlying network connection without
+// sending or waiting for a close frame.
+func (cli *Client) Close() error {
+	cli.mu.Lock()
+	defer cli.mu.Unlock()
 	fmt.Println("------------CLOSED")
 
-	if c.Conn == nil {
-		return nil
+	if cli.Conn != nil {
+		cli.Conn.Close()
 	}
+	cli.isConnected = false
 
-	err := c.Conn.Close()
-	if err != nil {
-		return err
-	}
-
-	c.Conn = nil
-
-	if err != nil {
-		return c.Error(err)
-	}
-
-	c.ConnectionState = interfaces.ConnectionStateClosed
+	cli.ConnectionState = interfaces.ConnectionStateClosed
 	return nil
 }
 
@@ -170,7 +236,7 @@ func (c *Client) Login(authParams map[string]interface{}) error {
 	go func() {
 		for {
 			acts, err := c.RecvActions()
-			fmt.Println("----------c.Protocol.RecvActions:")
+			fmt.Println("----------c.Protocol.RecvActions:", err)
 
 			if err != nil {
 				fmt.Errorf("handlerConnection:%v", err)
@@ -230,32 +296,59 @@ func (c *Client) getAuthChallenge() error {
 
 //SendAction writes an action in the websocket stream
 func (c *Client) SendAction(action interfaces.Action) error {
-	msg := action.ToAction()
-	err := c.Conn.WriteMessage(websocket.TextMessage, []byte(msg))
-	if err != nil {
-		return err
+	if c.IsConnected() {
+		msg := action.ToAction()
+		err := c.Conn.WriteMessage(websocket.TextMessage, []byte(msg))
+		if err != nil {
+			c.closeAndRecconect()
+			return err
+		}
+		return nil
 	}
-	return nil
+	return fmt.Errorf("Not Connected!")
 }
 
 //RecvActions receives actions from the websocket stream
 func (c *Client) RecvActions() ([]interfaces.Action, error) {
-	_, body, err := c.Conn.ReadMessage()
-	if err != nil {
-		return nil, err
-	}
-	msgs, err := message.ParseMessages(string(body))
-	if err != nil {
-		return nil, err
-	}
-	var actions []interfaces.Action
-	for _, msg := range msgs {
-		action, err := message.CathegorizeAction(msg)
+	if c.IsConnected() {
+		_, body, err := c.Conn.ReadMessage()
+		if err != nil {
+			c.closeAndRecconect()
+			return nil, err
+		}
+		msgs, err := message.ParseMessages(string(body))
 		if err != nil {
 			return nil, err
 		}
-		actions = append(actions, action)
+		var actions []interfaces.Action
+		for _, msg := range msgs {
+			action, err := message.CathegorizeAction(msg)
+			if err != nil {
+				return nil, err
+			}
+			actions = append(actions, action)
+		}
+
+		return actions, nil
 	}
 
-	return actions, nil
+	return []interfaces.Action{}, fmt.Errorf("Not Connected!")
+
+}
+
+// IsConnected returns the WebSocket connection state
+func (cli *Client) IsConnected() bool {
+	cli.mu.Lock()
+	defer cli.mu.Unlock()
+
+	return cli.isConnected
+}
+
+// CloseAndRecconect will try to reconnect.
+func (rc *Client) closeAndRecconect() {
+	rc.Close()
+	go func() {
+		rc.connect()
+	}()
+
 }
