@@ -10,35 +10,37 @@ package client
 import (
 	"encoding/json"
 	"fmt"
-
+	"github.com/gorilla/websocket"
 	"github.com/ga-con/deepstream.io-client-go/interfaces"
 	"github.com/ga-con/deepstream.io-client-go/message"
 )
 
 //Client represents a connection to a deepstream.io server
 type Client struct {
-	URL             string
-	Protocol        interfaces.Protocol
+	URL string
+	//Protocol        interfaces.Protocol
+	Conn            *websocket.Conn
 	ConnectionState interfaces.ConnectionState
 }
 
 //New creates a new client
 func New(url string, protocolOrNil ...interfaces.Protocol) (*Client, error) {
-	var proto interfaces.Protocol
+	/*var proto interfaces.Protocol
 	if len(protocolOrNil) == 1 {
 		proto = protocolOrNil[0]
-	}
-	if proto == nil {
+	}*/
+	/*if proto == nil {
 		var err error
 		proto, err = NewWebsocketProtocol(url)
 		if err != nil {
 			return nil, err
 		}
-	}
+	}*/
 	cli := &Client{
 		URL:             url,
 		ConnectionState: interfaces.ConnectionStateClosed,
-		Protocol:        proto,
+		Conn:            &websocket.Conn{},
+		//Protocol:        proto,
 	}
 
 	err := cli.Connect()
@@ -53,9 +55,17 @@ func New(url string, protocolOrNil ...interfaces.Protocol) (*Client, error) {
 func (c *Client) Connect() error {
 	c.ConnectionState = interfaces.ConnectionStateAwaitingConnection
 
-	err := c.Protocol.Connect()
+	url := fmt.Sprintf("ws://%s/deepstream", c.URL)
+	conn, _, err := websocket.DefaultDialer.Dial(url, nil)
 	if err != nil {
-		return c.Error(err)
+		return err
+	}
+
+	c.Conn = conn
+
+	err = c.getAuthChallenge()
+	if err != nil {
+		return err
 	}
 
 	//Send Challenge Response
@@ -74,12 +84,12 @@ func (c *Client) Connect() error {
 
 func (c *Client) sendChallengeResponse() error {
 	challenge := message.NewChallengeResponseAction(c.URL)
-	return c.Protocol.SendAction(challenge)
+	return c.SendAction(challenge)
 }
 
 func (c *Client) receiveAck(expectedTopic string) error {
 	// Receive connection Ack
-	actions, err := c.Protocol.RecvActions()
+	actions, err := c.RecvActions()
 	if err != nil {
 		return err
 	}
@@ -99,7 +109,19 @@ func (c *Client) receiveAck(expectedTopic string) error {
 
 //Close connection to deepstream.io server
 func (c *Client) Close() error {
-	err := c.Protocol.Close()
+	fmt.Println("------------CLOSED")
+
+	if c.Conn == nil {
+		return nil
+	}
+
+	err := c.Conn.Close()
+	if err != nil {
+		return err
+	}
+
+	c.Conn = nil
+
 	if err != nil {
 		return c.Error(err)
 	}
@@ -125,13 +147,13 @@ func (c *Client) Login(authParams map[string]interface{}) error {
 	}
 
 	//Send Authentication Request
-	err = c.Protocol.SendAction(authRequestAction)
+	err = c.SendAction(authRequestAction)
 	if err != nil {
 		return err
 	}
 
 	// Receive authentication Ack
-	actions, err := c.Protocol.RecvActions()
+	actions, err := c.RecvActions()
 	if len(actions) != 1 {
 		//TODO: change this
 		return c.Error(fmt.Errorf("Expected Auth Ack"))
@@ -144,6 +166,37 @@ func (c *Client) Login(authParams map[string]interface{}) error {
 
 	c.ConnectionState = interfaces.ConnectionStateOpen
 
+	// Listen RecvActions
+	go func() {
+		for {
+			acts, err := c.RecvActions()
+			fmt.Println("----------c.Protocol.RecvActions:")
+
+			if err != nil {
+				fmt.Errorf("handlerConnection:%v", err)
+				return
+			}
+
+			for _, act := range acts {
+				fmt.Println("act:", act)
+
+				if a, ok := act.(*message.PingAction); !ok || a.Topic != "C" {
+					fmt.Print("handlerConnection:", act)
+					continue
+				}
+
+				rAction, _ := message.NewPongAction(&message.Message{
+					Topic:  interfaces.TopicConnection,
+					Action: interfaces.ActionPong,
+				})
+
+				if err := c.SendAction(rAction); err != nil {
+					fmt.Println("NewPongAction Error:", err)
+				}
+			}
+		}
+	}()
+
 	return nil
 }
 
@@ -151,4 +204,58 @@ func (c *Client) Login(authParams map[string]interface{}) error {
 func (c *Client) Error(err error) error {
 	c.ConnectionState = interfaces.ConnectionStateError
 	return err
+}
+
+func (c *Client) getAuthChallenge() error {
+	_, body, err := c.Conn.ReadMessage()
+	if err != nil {
+		return err
+	}
+	msgs, err := message.ParseMessages(string(body))
+	if len(msgs) != 1 {
+		//TODO: Change this
+		return fmt.Errorf("authentication challenge expected")
+	}
+	msg := msgs[0]
+	action, err := message.CathegorizeAction(msg)
+	if err != nil {
+		return err
+	}
+	if _, ok := action.(*message.ChallengeAction); !ok {
+		return fmt.Errorf("authentication challenge expected 2")
+	}
+
+	return nil
+}
+
+//SendAction writes an action in the websocket stream
+func (c *Client) SendAction(action interfaces.Action) error {
+	msg := action.ToAction()
+	err := c.Conn.WriteMessage(websocket.TextMessage, []byte(msg))
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+//RecvActions receives actions from the websocket stream
+func (c *Client) RecvActions() ([]interfaces.Action, error) {
+	_, body, err := c.Conn.ReadMessage()
+	if err != nil {
+		return nil, err
+	}
+	msgs, err := message.ParseMessages(string(body))
+	if err != nil {
+		return nil, err
+	}
+	var actions []interfaces.Action
+	for _, msg := range msgs {
+		action, err := message.CathegorizeAction(msg)
+		if err != nil {
+			return nil, err
+		}
+		actions = append(actions, action)
+	}
+
+	return actions, nil
 }
