@@ -305,6 +305,9 @@ func (c *Client) getAuthChallenge() error {
 //SendAction writes an action in the websocket stream
 func (c *Client) SendAction(action interfaces.Action) error {
 	if c.IsConnected() {
+		c.mu.Lock()
+		defer c.mu.Unlock()
+
 		msg := action.ToAction()
 		err := c.Conn.WriteMessage(websocket.TextMessage, []byte(msg))
 		if err != nil {
