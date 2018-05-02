@@ -23,6 +23,7 @@ import (
 type AuthUser struct {
 	Username string
 	Password string
+	Token    string
 }
 
 // ClientOption is a function on the options for a connection.
@@ -63,6 +64,7 @@ type Client struct {
 	mu              sync.Mutex
 	dialErr         error
 	isConnected     bool
+	IsLogin         bool
 	dialer          *websocket.Dialer
 	*websocket.Conn
 }
@@ -112,6 +114,7 @@ func (cli *Client) connect() {
 		cli.mu.Lock()
 		cli.Conn = wsConn
 		cli.dialErr = err
+		cli.isConnected = err == nil
 		cli.mu.Unlock()
 
 		if err == nil {
@@ -138,12 +141,19 @@ func (cli *Client) connect() {
 				return
 			}
 
-			param := map[string]interface{}{"username": cli.Options.AuthUser.Username,
-				"password": cli.Options.AuthUser.Password}
+			var param map[string]interface{}
+			if len(cli.Options.AuthUser.Token) > 0 {
+				param = map[string]interface{}{"token": cli.Options.AuthUser.Token}
+			} else {
+				param = map[string]interface{}{
+					"username": cli.Options.AuthUser.Username,
+					"password": cli.Options.AuthUser.Password}
+			}
+
 			if err := cli.Login(param); err != nil {
 				log.Println(err)
-			}else{
-				cli.isConnected = true
+			} else {
+				cli.IsLogin = true
 			}
 
 			break
@@ -186,12 +196,12 @@ func (c *Client) receiveAck(expectedTopic string) error {
 func (cli *Client) Close() error {
 	cli.mu.Lock()
 	defer cli.mu.Unlock()
-	fmt.Println("------------CLOSED")
 
 	if cli.Conn != nil {
 		cli.Conn.Close()
 	}
 	cli.isConnected = false
+	cli.IsLogin = false
 
 	cli.ConnectionState = interfaces.ConnectionStateClosed
 	return nil
@@ -237,7 +247,6 @@ func (c *Client) Login(authParams map[string]interface{}) error {
 	go func() {
 		for {
 			acts, err := c.RecvActions()
-			fmt.Println("----------c.Protocol.RecvActions:", err)
 
 			if err != nil {
 				fmt.Errorf("handlerConnection:%v", err)
@@ -245,8 +254,6 @@ func (c *Client) Login(authParams map[string]interface{}) error {
 			}
 
 			for _, act := range acts {
-				fmt.Println("act:", act)
-
 				if a, ok := act.(*message.PingAction); !ok || a.Topic != "C" {
 					fmt.Print("handlerConnection:", act)
 					continue
