@@ -64,7 +64,7 @@ type Client struct {
 	mu              sync.Mutex
 	dialErr         error
 	isConnected     bool
-	IsLogin         bool
+	isLogin         bool
 	dialer          *websocket.Dialer
 	*websocket.Conn
 }
@@ -116,7 +116,6 @@ func (cli *Client) connect() {
 		cli.dialErr = err
 		cli.isConnected = err == nil
 		cli.mu.Unlock()
-
 		if err == nil {
 			log.Printf("Dial: connection was successfully established with %s\n", cli.URL)
 
@@ -153,7 +152,10 @@ func (cli *Client) connect() {
 			if err := cli.Login(param); err != nil {
 				log.Println(err)
 			} else {
-				cli.IsLogin = true
+				cli.mu.Lock()
+				cli.isLogin = true
+				cli.mu.Unlock()
+				log.Println("Login OK")
 			}
 
 			break
@@ -201,7 +203,7 @@ func (cli *Client) Close() error {
 		cli.Conn.Close()
 	}
 	cli.isConnected = false
-	cli.IsLogin = false
+	cli.isLogin = false
 
 	cli.ConnectionState = interfaces.ConnectionStateClosed
 	return nil
@@ -353,6 +355,14 @@ func (cli *Client) IsConnected() bool {
 	defer cli.mu.Unlock()
 
 	return cli.isConnected
+}
+
+// IsLogin returns the WebSocket connection state
+func (cli *Client) IsLogined() bool {
+	cli.mu.Lock()
+	defer cli.mu.Unlock()
+
+	return cli.isLogin
 }
 
 // CloseAndRecconect will try to reconnect.
