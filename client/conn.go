@@ -79,7 +79,7 @@ func Dial(url string, options ...ClientOption) (*Client, error) {
 	}
 
 	cli := &Client{
-		URL:             fmt.Sprintf("ws://%s/deepstream", url),
+		URL:             fmt.Sprintf("wss://%s/deepstream", url),
 		ConnectionState: interfaces.ConnectionStateClosed,
 		dialer:          websocket.DefaultDialer,
 		Options:         opts,
